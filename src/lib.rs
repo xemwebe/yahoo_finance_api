@@ -43,11 +43,18 @@ impl YResponse  {
         Ok(())
     }
 
+    /// Return the latest valid quote
     pub fn last_quote(&self) -> Result<Quote, YahooError> {
         self.check_consistency()?;
         let stock = &self.chart.result[0];
         let n = stock.timestamp.len()-1;
-        Ok(stock.indicators.get_ith_quote(stock.timestamp[n], n))
+        for i in (0..n).rev() {
+            let quote = stock.indicators.get_ith_quote(stock.timestamp[i], i);
+            if quote.is_ok() {
+                return quote;
+            }
+        }
+        Err(YahooError::EmptyDataSet)
     }
 
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
@@ -57,7 +64,10 @@ impl YResponse  {
         let n = stock.timestamp.len();
         for i in 0..n {
             let timestamp = stock.timestamp[i];
-            quotes.push(stock.indicators.get_ith_quote(timestamp, i))
+            let quote = stock.indicators.get_ith_quote(timestamp, i);
+            if quote.is_ok() {
+                quotes.push(quote.unwrap());
+            }
         }
         Ok(quotes)
     }
@@ -72,7 +82,7 @@ pub struct Quote {
     pub low: f64,
     pub volume: u32,
     pub close: f64,
-    pub adjclose: Option<f64>,
+    pub adjclose: f64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -150,21 +160,25 @@ pub struct QuoteBlock {
 }
 
 impl QuoteBlock {
-    fn get_ith_quote(&self, timestamp: u64, i: usize) -> Quote {
+    fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
         let adjclose = match &self.adjclose {
-            Some(adjclose) => { Some(adjclose[0].adjclose[i]) },
-            None => None,
+            Some(adjclose) => { adjclose[0].adjclose[i] },
+            None => 0.0,
         };
         let quote = &self.quote[0];
-        Quote{
-            timestamp: timestamp,
-            open: quote.open[i],
-            high: quote.high[i],
-            low: quote.low[i],
-            volume: quote.volume[i],
-            close: quote.close[i],
-            adjclose, 
+        // reject if close is not set
+        if quote.close[i].is_none() {
+            return Err(YahooError::EmptyDataSet);
         }
+        Ok(Quote{
+            timestamp: timestamp,
+            open: quote.open[i].unwrap_or(0.0),
+            high: quote.high[i].unwrap_or(0.0),
+            low: quote.low[i].unwrap_or(0.0),
+            volume: quote.volume[i].unwrap_or(0),
+            close: quote.close[i].unwrap(),
+            adjclose, 
+        })
     }
 }
 
@@ -175,11 +189,11 @@ pub struct AdjClose {
 
 #[derive(Deserialize, Debug)]
 pub struct QuoteList {
-    pub volume: Vec<u32>,
-    pub high: Vec<f64>,
-    pub close: Vec<f64>,
-    pub low: Vec<f64>,
-    pub open: Vec<f64>,
+    pub volume: Vec<Option<u32>>,
+    pub high: Vec<Option<f64>>,
+    pub close: Vec<Option<f64>>,
+    pub low: Vec<Option<f64>>,
+    pub open: Vec<Option<f64>>,
 }
 
 #[derive(Debug)]
@@ -277,9 +291,9 @@ mod tests {
     #[test]
     fn test_get_single_quote() {
         let provider = YahooConnector::new();
-        let response = provider.get_latest_quotes("AAPL", "1m").unwrap();
+        let response = provider.get_latest_quotes("HNL.DE", "1m").unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "AAPL");
+        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         let _ = response.last_quote().unwrap();
     }
 
