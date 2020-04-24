@@ -22,6 +22,59 @@ pub struct YResponse {
     pub chart: YChart,
 }
 
+impl YResponse  {
+    fn check_consistency(&self) -> Result<(), YahooError> {
+        for stock in &self.chart.result {
+            let n = stock.timestamp.len();
+            if n == 0 {
+                return Err(YahooError::EmptyDataSet);
+            }
+            let quote = &stock.indicators.quote[0];
+            if quote.open.len() != n || quote.high.len() != n || quote.low.len() != n || quote.volume.len() !=n || quote.close.len() !=n {
+                return Err(YahooError::DataInconsistency);
+            }
+            if stock.indicators.adjclose.is_some() {
+                let adjclose = stock.indicators.adjclose.as_ref().unwrap();
+                if adjclose[0].adjclose.len() != n {
+                    return Err(YahooError::DataInconsistency);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn last_quote(&self) -> Result<Quote, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        let n = stock.timestamp.len()-1;
+        Ok(stock.indicators.get_ith_quote(stock.timestamp[n], n))
+    }
+
+    pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        let mut quotes = Vec::new();
+        let n = stock.timestamp.len();
+        for i in 0..n {
+            let timestamp = stock.timestamp[i];
+            quotes.push(stock.indicators.get_ith_quote(timestamp, i))
+        }
+        Ok(quotes)
+    }
+}
+
+/// Struct for single quote
+#[derive(Debug)]
+pub struct Quote {
+    pub timestamp: u64,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub volume: u32,
+    pub close: f64,
+    pub adjclose: Option<f64>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct YChart {
     pub result: Vec<YQuoteBlock>,
@@ -31,7 +84,7 @@ pub struct YChart {
 #[derive(Deserialize, Debug)]
 pub struct YQuoteBlock {
     pub meta: YMetaData,
-    pub timestamp: Vec<u32>,
+    pub timestamp: Vec<u64>,
     pub indicators: QuoteBlock,
 }
 
@@ -96,6 +149,25 @@ pub struct QuoteBlock {
     adjclose: Option<Vec<AdjClose>>,
 }
 
+impl QuoteBlock {
+    fn get_ith_quote(&self, timestamp: u64, i: usize) -> Quote {
+        let adjclose = match &self.adjclose {
+            Some(adjclose) => { Some(adjclose[0].adjclose[i]) },
+            None => None,
+        };
+        let quote = &self.quote[0];
+        Quote{
+            timestamp: timestamp,
+            open: quote.open[i],
+            high: quote.high[i],
+            low: quote.low[i],
+            volume: quote.volume[i],
+            close: quote.close[i],
+            adjclose, 
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct AdjClose {
     adjclose: Vec<f64>,
@@ -116,6 +188,8 @@ pub enum YahooError {
     DeserializeFailed(String),
     ConnectionFailed,
     InvalidStatusCode,
+    EmptyDataSet,
+    DataInconsistency,
 }
 
 impl std::error::Error for YahooError {
@@ -133,6 +207,8 @@ impl fmt::Display for YahooError {
             Self::DeserializeFailed(s) => write!(f, "deserializing response from yahoo! finance failed: {}", &s),
             Self::ConnectionFailed => write!(f, "connection to yahoo! finance server failed"),
             Self::InvalidStatusCode => write!(f, "yahoo! finance return invalid status code"),
+            Self::EmptyDataSet => write!(f, "yahoo! finance returned an empty data set"),
+            Self::DataInconsistency => write!(f, "yahoo! finance returned inconsistent data"),
         }
     }
 }
@@ -151,9 +227,9 @@ impl YahooConnector {
     }
 
     /// Retrieve the latest quote for the given ticker
-    pub fn get_latest_quote(&self, ticker: &str) -> Result<YResponse, YahooError> {
+    pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         let url: String = format!(
-            "{url}/{symbol}?symbol={symbol}&interval=1d", url=self.url, symbol=ticker);
+            "{url}/{symbol}?symbol={symbol}&interval={interval}", url=self.url, symbol=ticker, interval=interval);
         let resp = self.send_request(&url)?;
         let response: YResponse =
             serde_json::from_value(resp).map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
@@ -200,19 +276,22 @@ mod tests {
 
     #[test]
     fn test_get_single_quote() {
-        let provider = YahooConnector::new(String::new());
-        let response = provider.get_latest_quote("AAPL").unwrap();
+        let provider = YahooConnector::new();
+        let response = provider.get_latest_quotes("AAPL", "1m").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "AAPL");
+        let _ = response.last_quote().unwrap();
     }
 
     #[test]
     fn test_get_quote_history() {
-        let provider = YahooConnector::new(String::new());
+        let provider = YahooConnector::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
         let resp = provider.get_quote_history("AAPL", start, end).unwrap();
 
         assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+        let quotes = resp.quotes().unwrap();
+        assert_eq!(quotes.len(), 21);
     }
 }
