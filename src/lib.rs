@@ -137,15 +137,14 @@ impl fmt::Display for YahooError {
     }
 }
 
-/// Container for connection paramters to edohistoricaldata server
+/// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
     url: &'static str,
 }
 
 impl YahooConnector {
-    /// Constructor for a new instance of EodHistConnector.
-    /// token is the API token you got from eodhistoricaldata
-    pub fn new(_token: String) -> YahooConnector {
+    /// Constructor for a new instance of the yahoo  connector.
+    pub fn new() -> YahooConnector {
         YahooConnector {
             url: "https://query1.finance.yahoo.com/v8/finance/chart",
         }
@@ -176,7 +175,7 @@ impl YahooConnector {
         Ok(response)
     }
 
-    /// Send request to eodhistoricaldata server and transform response to JSON value
+    /// Send request to yahoo! finance server and transform response to JSON value
     fn send_request(&self, url: &str) -> Result<Value, YahooError> {
         let resp = reqwest::get(url);
         if resp.is_err() {
