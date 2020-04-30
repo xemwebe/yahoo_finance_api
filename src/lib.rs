@@ -22,7 +22,7 @@
 //!     // extract just the latest valid quote summery
 //!     // including timestamp,open,close,high,low,volume
 //!     let quote = response.last_quote().unwrap();
-//!     let time: DateTime<Utc> = 
+//!     let time: DateTime<Utc> =
 //!         DateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
 //!     println!("At {} quote price of Apple was {}", time.to_rfc3339(), quote.close);
 //! }
@@ -45,19 +45,18 @@
 //! }
 //! ```
 
-use chrono::{DateTime,Utc};
+use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;
-
 
 #[derive(Deserialize, Debug)]
 pub struct YResponse {
     pub chart: YChart,
 }
 
-impl YResponse  {
+impl YResponse {
     fn check_consistency(&self) -> Result<(), YahooError> {
         for stock in &self.chart.result {
             let n = stock.timestamp.len();
@@ -65,7 +64,12 @@ impl YResponse  {
                 return Err(YahooError::EmptyDataSet);
             }
             let quote = &stock.indicators.quote[0];
-            if quote.open.len() != n || quote.high.len() != n || quote.low.len() != n || quote.volume.len() !=n || quote.close.len() !=n {
+            if quote.open.len() != n
+                || quote.high.len() != n
+                || quote.low.len() != n
+                || quote.volume.len() != n
+                || quote.close.len() != n
+            {
                 return Err(YahooError::DataInconsistency);
             }
             if stock.indicators.adjclose.is_some() {
@@ -82,7 +86,7 @@ impl YResponse  {
     pub fn last_quote(&self) -> Result<Quote, YahooError> {
         self.check_consistency()?;
         let stock = &self.chart.result[0];
-        let n = stock.timestamp.len()-1;
+        let n = stock.timestamp.len() - 1;
         for i in (0..n).rev() {
             let quote = stock.indicators.get_ith_quote(stock.timestamp[i], i);
             if quote.is_ok() {
@@ -137,38 +141,38 @@ pub struct YQuoteBlock {
 pub struct YMetaData {
     pub currency: String,
     pub symbol: String,
-    #[serde(rename="exchangeName")]
+    #[serde(rename = "exchangeName")]
     pub exchange_name: String,
-    #[serde(rename="instrumentType")]
+    #[serde(rename = "instrumentType")]
     pub instrument_type: String,
-    #[serde(rename="firstTradeDate")]
+    #[serde(rename = "firstTradeDate")]
     pub first_trade_date: u32,
-    #[serde(rename="regularMarketTime")]
+    #[serde(rename = "regularMarketTime")]
     pub regular_market_time: u32,
     pub gmtoffset: i32,
     pub timezone: String,
-    #[serde(rename="exchangeTimezoneName")]
+    #[serde(rename = "exchangeTimezoneName")]
     pub exchange_timezone_name: String,
-    #[serde(rename="regularMarketPrice")]
+    #[serde(rename = "regularMarketPrice")]
     pub regular_market_price: f64,
-    #[serde(rename="chartPreviousClose")]
+    #[serde(rename = "chartPreviousClose")]
     pub chart_previous_close: f64,
     #[serde(default)]
-    #[serde(rename="previousClose")]
+    #[serde(rename = "previousClose")]
     pub previous_close: Option<f64>,
     #[serde(default)]
     pub scale: Option<i32>,
-    #[serde(rename="priceHint")]
+    #[serde(rename = "priceHint")]
     pub price_hint: i32,
-    #[serde(rename="currentTradingPeriod")]
+    #[serde(rename = "currentTradingPeriod")]
     pub current_trading_period: TradingPeriod,
     #[serde(default)]
-    #[serde(rename="tradingPeriods")]
+    #[serde(rename = "tradingPeriods")]
     pub trading_periods: Option<Vec<Vec<PeriodInfo>>>,
-    #[serde(rename="dataGranularity")]
+    #[serde(rename = "dataGranularity")]
     pub data_granularity: String,
     pub range: String,
-    #[serde(rename="validRanges")]
+    #[serde(rename = "validRanges")]
     pub valid_ranges: Vec<String>,
 }
 
@@ -197,7 +201,7 @@ pub struct QuoteBlock {
 impl QuoteBlock {
     fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
         let adjclose = match &self.adjclose {
-            Some(adjclose) => { adjclose[0].adjclose[i] },
+            Some(adjclose) => adjclose[0].adjclose[i],
             None => None,
         };
         let quote = &self.quote[0];
@@ -205,14 +209,14 @@ impl QuoteBlock {
         if quote.close[i].is_none() {
             return Err(YahooError::EmptyDataSet);
         }
-        Ok(Quote{
+        Ok(Quote {
             timestamp: timestamp,
             open: quote.open[i].unwrap_or(0.0),
             high: quote.high[i].unwrap_or(0.0),
             low: quote.low[i].unwrap_or(0.0),
             volume: quote.volume[i].unwrap_or(0),
             close: quote.close[i].unwrap(),
-            adjclose: adjclose.unwrap_or(0.0), 
+            adjclose: adjclose.unwrap_or(0.0),
         })
     }
 }
@@ -252,8 +256,16 @@ impl std::error::Error for YahooError {
 impl fmt::Display for YahooError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FetchFailed(status) => write!(f, "fetchin the data from yahoo! finance failed: with status code {}", status),
-            Self::DeserializeFailed(s) => write!(f, "deserializing response from yahoo! finance failed: {}", &s),
+            Self::FetchFailed(status) => write!(
+                f,
+                "fetchin the data from yahoo! finance failed: with status code {}",
+                status
+            ),
+            Self::DeserializeFailed(s) => write!(
+                f,
+                "deserializing response from yahoo! finance failed: {}",
+                &s
+            ),
             Self::ConnectionFailed => write!(f, "connection to yahoo! finance server failed"),
             Self::InvalidStatusCode => write!(f, "yahoo! finance return invalid status code"),
             Self::EmptyDataSet => write!(f, "yahoo! finance returned an empty data set"),
@@ -278,10 +290,14 @@ impl YahooConnector {
     /// Retrieve the latest quote for the given ticker
     pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         let url: String = format!(
-            "{url}/{symbol}?symbol={symbol}&interval={interval}", url=self.url, symbol=ticker, interval=interval);
+            "{url}/{symbol}?symbol={symbol}&interval={interval}",
+            url = self.url,
+            symbol = ticker,
+            interval = interval
+        );
         let resp = self.send_request(&url)?;
-        let response: YResponse =
-            serde_json::from_value(resp).map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
+        let response: YResponse = serde_json::from_value(resp)
+            .map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
         Ok(response)
     }
 
@@ -292,11 +308,16 @@ impl YahooConnector {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<YResponse, YahooError> {
-        let url = format!("{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval=1d", 
-            url=self.url, symbol=ticker, start=start.timestamp(), end=end.timestamp());
+        let url = format!(
+            "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval=1d",
+            url = self.url,
+            symbol = ticker,
+            start = start.timestamp(),
+            end = end.timestamp()
+        );
         let resp = self.send_request(&url)?;
-        let response: YResponse =
-            serde_json::from_value(resp).map_err(|err| YahooError::DeserializeFailed(err.to_string()))?;
+        let response: YResponse = serde_json::from_value(resp)
+            .map_err(|err| YahooError::DeserializeFailed(err.to_string()))?;
         Ok(response)
     }
 
