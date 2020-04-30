@@ -198,7 +198,7 @@ impl QuoteBlock {
     fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
         let adjclose = match &self.adjclose {
             Some(adjclose) => { adjclose[0].adjclose[i] },
-            None => 0.0,
+            None => None,
         };
         let quote = &self.quote[0];
         // reject if close is not set
@@ -212,14 +212,14 @@ impl QuoteBlock {
             low: quote.low[i].unwrap_or(0.0),
             volume: quote.volume[i].unwrap_or(0),
             close: quote.close[i].unwrap(),
-            adjclose, 
+            adjclose: adjclose.unwrap_or(0.0), 
         })
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct AdjClose {
-    adjclose: Vec<f64>,
+    adjclose: Vec<Option<f64>>,
 }
 
 #[derive(Deserialize, Debug)]
