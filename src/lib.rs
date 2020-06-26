@@ -287,18 +287,9 @@ impl YahooConnector {
         }
     }
 
-    /// Retrieve the latest quote for the given ticker
+    /// Retrieve the quotes of the last day for the given ticker
     pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
-        let url: String = format!(
-            "{url}/{symbol}?symbol={symbol}&interval={interval}",
-            url = self.url,
-            symbol = ticker,
-            interval = interval
-        );
-        let resp = self.send_request(&url)?;
-        let response: YResponse = serde_json::from_value(resp)
-            .map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
-        Ok(response)
+        self.get_quote_range(ticker, interval, "1d")
     }
 
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available
@@ -308,12 +299,38 @@ impl YahooConnector {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<YResponse, YahooError> {
+        self.get_quote_history_interval(ticker, start, end, "1d")
+    }
+
+     /// Retrieve quotes for the given ticker for an arbitrary range
+     pub fn get_quote_range(&self, ticker: &str, interval: &str, range: &str) -> Result<YResponse, YahooError> {
+        let url: String = format!(
+            "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}",
+            url = self.url,
+            symbol = ticker,
+            interval = interval, 
+            range = range
+        );
+        let resp = self.send_request(&url)?;
+        let response: YResponse = serde_json::from_value(resp)
+            .map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
+        Ok(response)
+    }
+    /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
+    pub fn get_quote_history_interval(
+        &self,
+        ticker: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        interval: &str,
+    ) -> Result<YResponse, YahooError> {
         let url = format!(
-            "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval=1d",
+            "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}",
             url = self.url,
             symbol = ticker,
             start = start.timestamp(),
-            end = end.timestamp()
+            end = end.timestamp(),
+            interval = interval
         );
         let resp = self.send_request(&url)?;
         let response: YResponse = serde_json::from_value(resp)
@@ -350,6 +367,8 @@ mod tests {
         let response = provider.get_latest_quotes("HNL.DE", "1m").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
+        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
         let _ = response.last_quote().unwrap();
     }
 
@@ -363,5 +382,28 @@ mod tests {
         assert_eq!(resp.chart.result[0].timestamp.len(), 21);
         let quotes = resp.quotes().unwrap();
         assert_eq!(quotes.len(), 21);
+    }
+
+
+    #[test]
+    fn test_get_quote_range() {
+        let provider = YahooConnector::new();
+        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let _ = response.last_quote().unwrap();
+    }
+
+    #[test]
+    fn test_get_() {
+        let provider = YahooConnector::new();
+        let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
+        let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+        let response = provider.get_quote_history_interval("AAPL", start, end, "1mo").unwrap();
+        assert_eq!(&response.chart.result[0].timestamp.len(), &13);
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
+        let quotes = response.quotes().unwrap();
+        assert_eq!(quotes.len(), 13usize);
     }
 }
