@@ -127,7 +127,7 @@ impl YResponse {
 }
 
 /// Struct for single quote
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Quote {
     pub timestamp: u64,
     pub open: f64,
