@@ -167,7 +167,7 @@ pub struct YMetaData {
     #[serde(rename = "instrumentType")]
     pub instrument_type: String,
     #[serde(rename = "firstTradeDate")]
-    pub first_trade_date: u32,
+    pub first_trade_date: i32,
     #[serde(rename = "regularMarketTime")]
     pub regular_market_time: u32,
     pub gmtoffset: i32,
@@ -329,7 +329,7 @@ impl YahooConnector {
             "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}",
             url = self.url,
             symbol = ticker,
-            interval = interval, 
+            interval = interval,
             range = range
         );
         let resp = self.send_request(&url).await?;
@@ -395,6 +395,41 @@ mod tests {
     }
 
     #[test]
+    fn test_strange_api_responses() {
+        let provider = YahooConnector::new();
+        // let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
+
+        // assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
+        // assert_eq!(&response.chart.result[0].meta.range, "1d");
+        // assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
+        // let _ = response.last_quote().unwrap();
+
+        let start = Utc.ymd(2019, 7, 3).and_hms_milli(0, 0, 0, 0);
+        let end = Utc.ymd(2020, 7, 4).and_hms_milli(23, 59, 59, 999);
+        let resp = provider.get_quote_history("IBM", start, end).unwrap();
+
+        assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
+        //assert_eq!(&resp.chart.result[0].meta.range, "1d");
+        assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
+        assert_eq!(&resp.chart.result[0].meta.first_trade_date, &-252322200);
+
+        let _ = resp.last_quote().unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "DeserializeFailed(\"missing field `adjclose`\")")]
+    fn test_api_responses_missing_fields() {
+        let provider = YahooConnector::new();
+        let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
+        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
+        let _ = response.last_quote().unwrap();
+    }
+
+
+    #[test]
     fn test_get_quote_history() {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
@@ -405,7 +440,6 @@ mod tests {
         let quotes = resp.quotes().unwrap();
         assert_eq!(quotes.len(), 21);
     }
-
 
     #[test]
     fn test_get_quote_range() {
