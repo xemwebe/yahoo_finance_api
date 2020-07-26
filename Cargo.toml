@@ -1,6 +1,6 @@
 [package]
 name = "yahoo_finance_api"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Mark Beinker <mwb@quantlink.de>"]
 edition = "2018"
 description = "A rust adapter for the yahoo! finance API to fetch histories of market data quotes."
@@ -11,7 +11,10 @@ keywords = ["finance", "yahoo", "stock", "quote"]
 categories = ["api-bindings"]
 
 [dependencies]
-reqwest = "0.9"
+reqwest = { version = "0.10", features = ["json"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
+
+[dev-dependencies]
+tokio-test = "*"

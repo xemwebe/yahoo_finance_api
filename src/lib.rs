@@ -9,16 +9,21 @@
 //! in some cases if yahoo does provide somehow invalid data), I currently can't use it. Once this issue is fixed,
 //! I might switch back and drop development of this library.
 //!
+//! Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
+//! Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via funtions like ```block_on```.
+//! The examples are based on the ```tokio``` runtime. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
+//! 
 //! Get the latest available quote:
 //! ```rust
 //! use yahoo_finance_api as yahoo;
 //! use std::time::{Duration, UNIX_EPOCH};
 //! use chrono::prelude::*;
-//!
+//! use tokio_test;
+//! 
 //! fn main() {
 //!     let provider = yahoo::YahooConnector::new();
 //!     // get the latest quotes in 1 minute intervals
-//!     let response = provider.get_latest_quotes("AAPL", "1m").unwrap();
+//!     let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1m")).unwrap();
 //!     // extract just the latest valid quote summery
 //!     // including timestamp,open,close,high,low,volume
 //!     let quote = response.last_quote().unwrap();
@@ -33,13 +38,14 @@
 //! use yahoo_finance_api as yahoo;
 //! use std::time::{Duration, UNIX_EPOCH};
 //! use chrono::{Utc,TimeZone};
-//!
+//! use tokio_test;
+//! 
 //! fn main() {
 //!     let provider = yahoo::YahooConnector::new();
 //!     let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
 //!     let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
 //!     // returns historic quotes with daily interval
-//!     let resp = provider.get_quote_history("AAPL", start, end).unwrap();
+//!     let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end)).unwrap();
 //!     let quotes = resp.quotes().unwrap();
 //!     println!("Apple's quotes in January: {:?}", quotes);
 //! }
@@ -50,10 +56,11 @@
 //! use yahoo_finance_api as yahoo;
 //! use std::time::{Duration, UNIX_EPOCH};
 //! use chrono::{Utc,TimeZone};
+//! use tokio_test;
 //! 
 //! fn main() {
 //!     let provider = yahoo::YahooConnector::new();
-//!     let response = provider.get_quote_range("AAPL", "1d", "1mo").unwrap();
+//!     let response = tokio_test::block_on(provider.get_quote_range("AAPL", "1d", "1mo")).unwrap();
 //!     let quotes = response.quotes().unwrap();
 //!     println!("Apple's quotes of the last month: {:?}", quotes);
 //! }
@@ -302,22 +309,22 @@ impl YahooConnector {
     }
 
     /// Retrieve the quotes of the last day for the given ticker
-    pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
-        self.get_quote_range(ticker, interval, "1d")
+    pub async fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
+        self.get_quote_range(ticker, interval, "1d").await
     }
 
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available
-    pub fn get_quote_history(
+    pub async fn get_quote_history(
         &self,
         ticker: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<YResponse, YahooError> {
-        self.get_quote_history_interval(ticker, start, end, "1d")
+        self.get_quote_history_interval(ticker, start, end, "1d").await
     }
 
      /// Retrieve quotes for the given ticker for an arbitrary range
-     pub fn get_quote_range(&self, ticker: &str, interval: &str, range: &str) -> Result<YResponse, YahooError> {
+     pub async fn get_quote_range(&self, ticker: &str, interval: &str, range: &str) -> Result<YResponse, YahooError> {
         let url: String = format!(
             "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}",
             url = self.url,
@@ -325,13 +332,13 @@ impl YahooConnector {
             interval = interval, 
             range = range
         );
-        let resp = self.send_request(&url)?;
+        let resp = self.send_request(&url).await?;
         let response: YResponse = serde_json::from_value(resp)
             .map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
         Ok(response)
     }
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
-    pub fn get_quote_history_interval(
+    pub async fn get_quote_history_interval(
         &self,
         ticker: &str,
         start: DateTime<Utc>,
@@ -346,21 +353,21 @@ impl YahooConnector {
             end = end.timestamp(),
             interval = interval
         );
-        let resp = self.send_request(&url)?;
+        let resp = self.send_request(&url).await?;
         let response: YResponse = serde_json::from_value(resp)
             .map_err(|err| YahooError::DeserializeFailed(err.to_string()))?;
         Ok(response)
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value
-    fn send_request(&self, url: &str) -> Result<Value, YahooError> {
-        let resp = reqwest::get(url);
+    async fn send_request(&self, url: &str) -> Result<Value, YahooError> {
+        let resp = reqwest::get(url).await;
         if resp.is_err() {
             return Err(YahooError::ConnectionFailed);
         }
-        let mut resp = resp.unwrap();
+        let resp = resp.unwrap();
         match resp.status() {
-            StatusCode::OK => match resp.json() {
+            StatusCode::OK => match resp.json().await {
                 Ok(json) => Ok(json),
                 _ => Err(YahooError::InvalidStatusCode),
             },
@@ -374,11 +381,12 @@ impl YahooConnector {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use tokio_test;
 
     #[test]
     fn test_get_single_quote() {
         let provider = YahooConnector::new();
-        let response = provider.get_latest_quotes("HNL.DE", "1m").unwrap();
+        let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1m")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1d");
@@ -391,7 +399,7 @@ mod tests {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
-        let resp = provider.get_quote_history("AAPL", start, end).unwrap();
+        let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end)).unwrap();
 
         assert_eq!(resp.chart.result[0].timestamp.len(), 21);
         let quotes = resp.quotes().unwrap();
@@ -402,7 +410,7 @@ mod tests {
     #[test]
     fn test_get_quote_range() {
         let provider = YahooConnector::new();
-        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+        let response = tokio_test::block_on(provider.get_quote_range("HNL.DE", "1d", "1mo")).unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
@@ -414,7 +422,7 @@ mod tests {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
-        let response = provider.get_quote_history_interval("AAPL", start, end, "1mo").unwrap();
+        let response = tokio_test::block_on(provider.get_quote_history_interval("AAPL", start, end, "1mo")).unwrap();
         assert_eq!(&response.chart.result[0].timestamp.len(), &13);
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
