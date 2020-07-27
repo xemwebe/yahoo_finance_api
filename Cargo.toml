@@ -1,17 +1,25 @@
 [package]
-name = "yahoo_finance_api"
-version = "0.2.3"
 authors = ["Mark Beinker <mwb@quantlink.de>"]
-edition = "2018"
-description = "A rust adapter for the yahoo! finance API to fetch histories of market data quotes."
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/xemwebe/yahoo_finance_api"
-readme = "README.md"
-keywords = ["finance", "yahoo", "stock", "quote"]
 categories = ["api-bindings"]
+description = "A rust adapter for the yahoo! finance API to fetch histories of market data quotes."
+edition = "2018"
+keywords = ["finance", "yahoo", "stock", "quote"]
+license = "MIT OR Apache-2.0"
+name = "yahoo_finance_api"
+readme = "README.md"
+repository = "https://github.com/xemwebe/yahoo_finance_api"
+version = "0.2.3"
 
 [dependencies]
-reqwest = "0.9"
-serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures = "0.3"
+wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}
+wasm-bindgen-futures = "0.4"
+web-sys = {version = "0.3", features = ['Headers', 'Request', 'RequestInit', 'RequestMode', 'Response', 'Window']}
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { version = "1", features = ["json"] }

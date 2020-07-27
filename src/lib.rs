@@ -60,10 +60,17 @@
 //! ```
 
 use chrono::{DateTime, Utc};
-use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;
+
+#[cfg(target_arch = "wasm32")]
+use {
+    futures,
+    wasm_bindgen::JsCast,
+    wasm_bindgen_futures::JsFuture,
+    web_sys::{Request, RequestInit, RequestMode, Response},
+};
 
 #[derive(Deserialize, Debug)]
 pub struct YResponse {
@@ -251,7 +258,7 @@ pub struct QuoteList {
 
 #[derive(Debug)]
 pub enum YahooError {
-    FetchFailed(StatusCode),
+    FetchFailed(u16),
     DeserializeFailed(String),
     ConnectionFailed,
     InvalidStatusCode,
@@ -261,9 +268,7 @@ pub enum YahooError {
 
 impl std::error::Error for YahooError {
     fn cause(&self) -> Option<&dyn std::error::Error> {
-        match self {
-            _ => None,
-        }
+        None
     }
 }
 
@@ -289,6 +294,7 @@ impl fmt::Display for YahooError {
 }
 
 /// Container for connection parameters to yahoo! finance server
+#[derive(Default)]
 pub struct YahooConnector {
     url: &'static str,
 }
@@ -357,20 +363,38 @@ impl YahooConnector {
         Ok(response)
     }
 
-    /// Send request to yahoo! finance server and transform response to JSON value
-    fn send_request(&self, url: &str) -> Result<Value, YahooError> {
-        let resp = reqwest::get(url);
-        if resp.is_err() {
-            return Err(YahooError::ConnectionFailed);
-        }
-        let mut resp = resp.unwrap();
-        match resp.status() {
-            StatusCode::OK => match resp.json() {
-                Ok(json) => Ok(json),
-                _ => Err(YahooError::InvalidStatusCode),
-            },
+    #[cfg(target_arch = "wasm32")]
+    pub fn send_request(&self, url: &str) -> Result<Value, YahooError> {
+        let mut opts = RequestInit::new();
+        opts.method("GET");
+        opts.mode(RequestMode::Cors);
+        let request = Request::new_with_str_and_init(&url, &opts).unwrap();
 
-            status => Err(YahooError::FetchFailed(status)),
+        let window = web_sys::window().unwrap();
+        let resp_value =
+            futures::executor::block_on(JsFuture::from(window.fetch_with_request(&request)))
+                .unwrap();
+        // `resp_value` is a `Response` object.
+        let resp: Response = resp_value.dyn_into().unwrap();
+        // Convert this other `Promise` into a rust `Future`.
+        let json = futures::executor::block_on(JsFuture::from(resp.json().unwrap())).unwrap();
+        // Use serde to parse the JSON into a struct.
+        // Send the `Branch` struct back to JS as an `Object`.
+        Ok(json.into_serde().unwrap())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn send_request(&self, url: &str) -> Result<Value, YahooError> {
+        let resp = ureq::get(url).call();
+        if !resp.synthetic() {
+            if resp.ok() {
+                resp.into_json()
+                    .map_err(|e| YahooError::DeserializeFailed(e.to_string()))
+            } else {
+                Err(YahooError::FetchFailed(resp.status()))
+            }
+        } else {
+            Err(YahooError::ConnectionFailed)
         }
     }
 }
@@ -424,7 +448,6 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
         let _ = response.last_quote().unwrap();
     }
-
 
     #[test]
     fn test_get_quote_history() {
