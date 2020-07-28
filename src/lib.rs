@@ -384,17 +384,20 @@ impl YahooConnector {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    /// Send request to yahoo! finance server and transform response to JSON value
     fn send_request(&self, url: &str) -> Result<Value, YahooError> {
-        let resp = ureq::get(url).call();
-        if !resp.synthetic() {
-            if resp.ok() {
-                resp.into_json()
-                    .map_err(|e| YahooError::DeserializeFailed(e.to_string()))
-            } else {
-                Err(YahooError::FetchFailed(resp.status()))
-            }
-        } else {
-            Err(YahooError::ConnectionFailed)
+        let resp = reqwest::get(url);
+        if resp.is_err() {
+            return Err(YahooError::ConnectionFailed);
+        }
+        let mut resp = resp.unwrap();
+        match resp.status() {
+            reqwest::StatusCode::OK => match resp.json() {
+                Ok(json) => Ok(json),
+                _ => Err(YahooError::InvalidStatusCode),
+            },
+
+            status => Err(YahooError::FetchFailed(u16::from(status))),
         }
     }
 }
