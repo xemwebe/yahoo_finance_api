@@ -11,10 +11,14 @@ keywords = ["finance", "yahoo", "stock", "quote"]
 categories = ["api-bindings"]
 
 [dependencies]
-reqwest = { version = "0.10", features = ["json"] }
+reqwest = { version = "0.10", features = ["json", "rustls"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
 
 [dev-dependencies]
 tokio-test = "0.2"
+
+
+[features]
+blocking = ["reqwest/blocking"]

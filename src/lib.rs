@@ -69,8 +69,17 @@
 use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use serde_json::Value;
 use std::fmt;
+
+const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
+
+// Macros instead of constants, 
+macro_rules! YCHART_PERIOD_QUERY {
+    () => {"{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}"};
+}
+macro_rules! YCHART_RANGE_QUERY {
+    () => {"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"};
+} 
 
 #[derive(Deserialize, Debug)]
 pub struct YResponse {
@@ -268,9 +277,7 @@ pub enum YahooError {
 
 impl std::error::Error for YahooError {
     fn cause(&self) -> Option<&dyn std::error::Error> {
-        match self {
-            _ => None,
-        }
+        None
     }
 }
 
@@ -296,17 +303,23 @@ impl fmt::Display for YahooError {
 }
 
 /// Container for connection parameters to yahoo! finance server
+#[derive(Default)]
 pub struct YahooConnector {
     url: &'static str,
 }
+
 
 impl YahooConnector {
     /// Constructor for a new instance of the yahoo  connector.
     pub fn new() -> YahooConnector {
         YahooConnector {
-            url: "https://query1.finance.yahoo.com/v8/finance/chart",
+            url: YCHART_URL,
         }
     }
+}
+
+#[cfg(not(feature = "blocking"))]
+impl YahooConnector {
 
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
@@ -336,18 +349,14 @@ impl YahooConnector {
         range: &str,
     ) -> Result<YResponse, YahooError> {
         let url: String = format!(
-            "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}",
+            YCHART_RANGE_QUERY!(),
             url = self.url,
             symbol = ticker,
             interval = interval,
             range = range
         );
-        let resp = self.send_request(&url).await?;
-        let response: YResponse = serde_json::from_value(resp)
-            .map_err(|e| YahooError::DeserializeFailed(e.to_string()))?;
-        Ok(response)
+        send_request(&url).await
     }
-    
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval(
         &self,
@@ -357,34 +366,113 @@ impl YahooConnector {
         interval: &str,
     ) -> Result<YResponse, YahooError> {
         let url = format!(
-            "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}",
+            YCHART_PERIOD_QUERY!(),
             url = self.url,
             symbol = ticker,
             start = start.timestamp(),
             end = end.timestamp(),
             interval = interval
         );
-        let resp = self.send_request(&url).await?;
-        let response: YResponse = serde_json::from_value(resp)
-            .map_err(|err| YahooError::DeserializeFailed(err.to_string()))?;
-        Ok(response)
+        send_request(&url).await
+    }
+}
+
+#[cfg(feature = "blocking")]
+impl YahooConnector {
+    /// Retrieve the quotes of the last day for the given ticker
+    pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
+        self.get_quote_range(ticker, interval, "1d")
     }
 
-    /// Send request to yahoo! finance server and transform response to JSON value
-    async fn send_request(&self, url: &str) -> Result<Value, YahooError> {
-        let resp = reqwest::get(url).await;
-        if resp.is_err() {
-            return Err(YahooError::ConnectionFailed);
-        }
-        let resp = resp.unwrap();
-        match resp.status() {
-            StatusCode::OK => match resp.json().await {
-                Ok(json) => Ok(json),
-                _ => Err(YahooError::InvalidStatusCode),
-            },
+    /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available
+    pub fn get_quote_history(
+        &self,
+        ticker: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<YResponse, YahooError> {
+        self.get_quote_history_interval(ticker, start, end, "1d")
+    }
 
-            status => Err(YahooError::FetchFailed(status)),
+    /// Retrieve quotes for the given ticker for an arbitrary range
+    pub fn get_quote_range(
+        &self,
+        ticker: &str,
+        interval: &str,
+        range: &str,
+    ) -> Result<YResponse, YahooError> {
+        let url: String = format!(
+            YCHART_RANGE_QUERY!(),
+            url = self.url,
+            symbol = ticker,
+            interval = interval,
+            range = range
+        );
+        send_request(&url)
+    }
+    /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
+    pub fn get_quote_history_interval(
+        &self,
+        ticker: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        interval: &str,
+    ) -> Result<YResponse, YahooError> {
+        let url = format!(
+            YCHART_PERIOD_QUERY!(),
+            url = self.url,
+            symbol = ticker,
+            start = start.timestamp(),
+            end = end.timestamp(),
+            interval = interval
+        );
+        send_request(&url)
+    }
+}
+
+#[cfg(not(feature = "blocking"))]
+/// Send request to yahoo! finance server and transform response to JSON value
+async fn send_request(url: &str) -> Result<YResponse, YahooError> {
+    let resp = reqwest::get(url).await;
+    if resp.is_err() {
+        return Err(YahooError::ConnectionFailed);
+    }
+    let resp = resp.unwrap();
+    match resp.status() {
+        StatusCode::OK => {
+            if let Ok(json) = resp.json().await {
+                match serde_json::from_value(json) {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(YahooError::DeserializeFailed(e.to_string())),
+                }
+            } else {
+                Err(YahooError::InvalidStatusCode)
+            }
         }
+        status => Err(YahooError::FetchFailed(status)),
+    }
+}
+
+#[cfg(feature = "blocking")]
+/// Send request to yahoo! finance server and transform response to JSON value
+fn send_request(url: &str) -> Result<YResponse, YahooError> {
+    let resp = reqwest::blocking::get(url);
+    if resp.is_err() {
+        return Err(YahooError::ConnectionFailed);
+    }
+    let resp = resp.unwrap();
+    match resp.status() {
+        StatusCode::OK => {
+            if let Ok(json) = resp.json() {
+                match serde_json::from_value(json) {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(YahooError::DeserializeFailed(e.to_string())),
+                }
+            } else {
+                Err(YahooError::InvalidStatusCode)
+            }
+        }
+        status => Err(YahooError::FetchFailed(status)),
     }
 }
 
@@ -392,7 +480,6 @@ impl YahooConnector {
 mod tests {
     use super::*;
     use chrono::TimeZone;
-    use tokio_test;
 
     #[test]
     fn test_get_single_quote() {
