@@ -11,6 +11,8 @@ I might switch back and drop development of this library.
 Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
 Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via funtions like ```block_on```. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
 
+Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "0.3", features = ["blocking"]}`. 
+
 
 Get the latest available quote:
 ```rust
@@ -48,9 +50,11 @@ fn main() {
     let quotes = resp.quotes().unwrap();
     println!("Apple's quotes in January: {:?}", quotes);
 }
+
 ```
 Another method to retrieve a range of quotes is by
 requesting the quotes for a given period and lookup frequency. Here is an example retrieving the daily quotes for the last month:
+
 ```rust
 use yahoo_finance_api as yahoo;
 use std::time::{Duration, UNIX_EPOCH};
