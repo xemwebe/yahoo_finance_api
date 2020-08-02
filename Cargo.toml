@@ -1,7 +1,7 @@
 [package]
 name = "yahoo_finance_api"
 version = "0.3.1"
-authors = ["Mark Beinker <mwb@quantlink.de>"]
+authors = ["Mark Beinker <mwb@quantlink.de>", "Claus Matzinger <claus.matzinger+kb@gmail.com>"]
 edition = "2018"
 description = "A rust adapter for the yahoo! finance API to fetch histories of market data quotes."
 license = "MIT OR Apache-2.0"
