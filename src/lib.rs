@@ -67,6 +67,7 @@ use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::fmt;
+#[cfg(not(feature = "blocking"))]
 use tokio_compat_02::FutureExt;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -454,7 +455,7 @@ async fn send_request(url: &str) -> Result<YResponse, YahooError> {
 #[cfg(feature = "blocking")]
 /// Send request to yahoo! finance server and transform response to JSON value
 fn send_request(url: &str) -> Result<YResponse, YahooError> {
-    let resp = reqwest::blocking::get(url).compat();
+    let resp = reqwest::blocking::get(url);
     if resp.is_err() {
         return Err(YahooError::ConnectionFailed);
     }
