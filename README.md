@@ -13,12 +13,12 @@ Get the latest available quote (without the blocking feature enabled):
 use yahoo_finance_api as yahoo;
 use std::time::{Duration, UNIX_EPOCH};
 use chrono::prelude::*;
+use tokio_test;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
-    let response = provider.get_latest_quotes("AAPL", "1m").await.unwrap();
+    let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1m")).unwrap();
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
