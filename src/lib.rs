@@ -8,7 +8,7 @@
 //! Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via functions like ```block_on```.
 //! The examples are based on the ```tokio``` runtime. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
 //!
-//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`. 
+//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
 //! Get the latest available quote:
 //! ```rust
@@ -71,13 +71,17 @@ use tokio_compat_02::FutureExt;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 
-// Macros instead of constants, 
+// Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
-    () => {"{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}"};
+    () => {
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}"
+    };
 }
 macro_rules! YCHART_RANGE_QUERY {
-    () => {"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"};
-} 
+    () => {
+        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"
+    };
+}
 
 #[derive(Deserialize, Debug)]
 pub struct YResponse {
@@ -306,19 +310,15 @@ pub struct YahooConnector {
     url: &'static str,
 }
 
-
 impl YahooConnector {
     /// Constructor for a new instance of the yahoo  connector.
     pub fn new() -> YahooConnector {
-        YahooConnector {
-            url: YCHART_URL,
-        }
+        YahooConnector { url: YCHART_URL }
     }
 }
 
 #[cfg(not(feature = "blocking"))]
 impl YahooConnector {
-
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
         &self,
@@ -454,7 +454,7 @@ async fn send_request(url: &str) -> Result<YResponse, YahooError> {
 #[cfg(feature = "blocking")]
 /// Send request to yahoo! finance server and transform response to JSON value
 fn send_request(url: &str) -> Result<YResponse, YahooError> {
-    let resp = reqwest::blocking::get(url).compat();
+    let resp = reqwest::blocking::get(url);
     if resp.is_err() {
         return Err(YahooError::ConnectionFailed);
     }
@@ -480,6 +480,19 @@ mod tests {
     use chrono::TimeZone;
 
     #[test]
+    #[cfg(feature = "blocking")]
+    fn test_get_single_quote_blocking() {
+        let provider = YahooConnector::new();
+        let response = provider.get_latest_quotes("HNL.DE", "1m").unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
+        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
+        let _ = response.last_quote().unwrap();
+    }
+
+    #[test]
+    #[cfg(not(feature = "blocking"))]
     fn test_get_single_quote() {
         let provider = YahooConnector::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1m")).unwrap();
@@ -491,6 +504,8 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "blocking"))]
+
     fn test_strange_api_responses() {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2019, 7, 3).and_hms_milli(0, 0, 0, 0);
@@ -506,6 +521,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "DeserializeFailed(\"missing field `adjclose`\")")]
+    #[cfg(not(feature = "blocking"))]
     fn test_api_responses_missing_fields() {
         let provider = YahooConnector::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();
@@ -517,6 +533,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "blocking"))]
     fn test_get_quote_history() {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
@@ -529,6 +546,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "blocking"))]
     fn test_get_quote_range() {
         let provider = YahooConnector::new();
         let response =
@@ -540,6 +558,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "blocking"))]
     fn test_get() {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
@@ -554,9 +573,11 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "blocking"))]
     fn test_large_volume() {
         let provider = YahooConnector::new();
-        let response = tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
+        let response =
+            tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 5usize);
     }
