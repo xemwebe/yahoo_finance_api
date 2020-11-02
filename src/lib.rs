@@ -4,14 +4,11 @@
 //! the [yahoo! finance](https://finance.yahoo.com) website via their API. This project
 //! is licensed under Apache 2.0 or MIT license (see files LICENSE-Apache2.0 and LICENSE-MIT).
 //!
-//! There is already an existing rust library [yahoo-finance-rs](https://github.com/fbriden/yahoo-finance-rs),
-//! which I intended to use for my own projects. However, due some issues in the implementation (the library panics
-//! in some cases if yahoo does provide somehow invalid data), I currently can't use it. Once this issue is fixed,
-//! I might switch back and drop development of this library.
-//!
 //! Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
 //! Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via funtions like ```block_on```.
 //! The examples are based on the ```tokio``` runtime. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
+//!
+//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`. 
 //!
 //! Get the latest available quote:
 //! ```rust
@@ -150,7 +147,7 @@ pub struct Quote {
     pub open: f64,
     pub high: f64,
     pub low: f64,
-    pub volume: u32,
+    pub volume: u64,
     pub close: f64,
     pub adjclose: f64,
 }
@@ -259,7 +256,7 @@ pub struct AdjClose {
 
 #[derive(Deserialize, Debug)]
 pub struct QuoteList {
-    pub volume: Vec<Option<u32>>,
+    pub volume: Vec<Option<u64>>,
     pub high: Vec<Option<f64>>,
     pub close: Vec<Option<f64>>,
     pub low: Vec<Option<f64>>,
@@ -543,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_() {
+    fn test_get() {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
@@ -554,5 +551,13 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 13usize);
+    }
+
+    #[test]
+    fn test_large_volume() {
+        let provider = YahooConnector::new();
+        let response = tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
+        let quotes = response.quotes().unwrap();
+        assert_eq!(quotes.len(), 5usize);
     }
 }

@@ -3,16 +3,10 @@ This project provides a set of functions to receive data from the
 the [yahoo! finance](https://finance.yahoo.com) website via their API. This project
 is licensed under Apache 2.0 or MIT license (see files LICENSE-Apache2.0 and LICENSE-MIT).
 
-There is already an existing rust library [yahoo-finance-rs](https://github.com/fbriden/yahoo-finance-rs),
-which I intended to use for my own projects. However, due some issues in the implementation (the library panics
-in some cases if yahoo does provide somehow invalid data), I currently can't use it. Once this issue is fixed,
-I might switch back and drop development of this library.
-
 Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
-Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via funtions like ```block_on```. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
+Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via functions like ```block_on```. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
 
-Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "0.3", features = ["blocking"]}`. 
-
+Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`. 
 
 Get the latest available quote:
 ```rust
