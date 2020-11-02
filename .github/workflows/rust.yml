@@ -22,7 +22,5 @@ jobs:
       run: cargo test --verbose
     - name: Build with blocking enabled
       run: cargo build --verbose --features "blocking"
-    - name: Run tests
-      run: cargo test --verbose
     - name: Run tests with blocking enabled
       run: cargo test --verbose --features "blocking"
