@@ -66,8 +66,6 @@ fn main() {
 With the blocking feature enabled, the last example would just look like
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
-use chrono::{Utc,TimeZone};
 
 fn main() {
     let provider = yahoo::YahooConnector::new();
