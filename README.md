@@ -6,7 +6,7 @@ is licensed under Apache 2.0 or MIT license (see files LICENSE-Apache2.0 and LIC
 Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
 Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via functions like ```block_on```. The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
 
-Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`. 
+Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version" = "1.0", features = ["blocking"]}`. 
 
 Get the latest available quote (without the blocking feature enabled):
 ```rust
@@ -66,8 +66,6 @@ fn main() {
 With the blocking feature enabled, the last example would just look like
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
-use chrono::{Utc,TimeZone};
 
 fn main() {
     let provider = yahoo::YahooConnector::new();
