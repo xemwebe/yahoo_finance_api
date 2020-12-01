@@ -437,7 +437,7 @@ mod tests {
         let mut apple_found = false;
         for item in resp.quotes 
         {
-            if item.exchange == "NMS" && item.symbol == "AAPL" && item.longname == "Apple Inc." {
+            if item.exchange == "NMS" && item.symbol == "AAPL" && item.short_name == "Apple Inc." {
                 apple_found = true;
                 break;
             }
