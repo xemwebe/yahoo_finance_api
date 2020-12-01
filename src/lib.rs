@@ -107,8 +107,6 @@ requesting the quotes for a given period and lookup frequency. Here is an exampl
 
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
-use chrono::{Utc,TimeZone};
 use tokio_test;
 
 fn main() {
@@ -122,12 +120,19 @@ fn main() {
 
 use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
-use serde::Deserialize;
-use std::fmt;
+
 #[cfg(not(feature = "blocking"))]
 use tokio_compat_02::FutureExt;
 
+mod quotes;
+mod search_result;
+mod yahoo_error;
+use quotes::YResponse;
+use search_result::YSearchResult;
+use yahoo_error::YahooError;
+
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
+const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
 
 // Macros instead of constants, 
 macro_rules! YCHART_PERIOD_QUERY {
@@ -136,232 +141,15 @@ macro_rules! YCHART_PERIOD_QUERY {
 macro_rules! YCHART_RANGE_QUERY {
     () => {"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"};
 } 
-
-#[derive(Deserialize, Debug)]
-pub struct YResponse {
-    pub chart: YChart,
-}
-
-impl YResponse {
-    fn check_consistency(&self) -> Result<(), YahooError> {
-        for stock in &self.chart.result {
-            let n = stock.timestamp.len();
-            if n == 0 {
-                return Err(YahooError::EmptyDataSet);
-            }
-            let quote = &stock.indicators.quote[0];
-            if quote.open.len() != n
-                || quote.high.len() != n
-                || quote.low.len() != n
-                || quote.volume.len() != n
-                || quote.close.len() != n
-            {
-                return Err(YahooError::DataInconsistency);
-            }
-            if stock.indicators.adjclose.is_some() {
-                let adjclose = stock.indicators.adjclose.as_ref().unwrap();
-                if adjclose[0].adjclose.len() != n {
-                    return Err(YahooError::DataInconsistency);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Return the latest valid quote
-    pub fn last_quote(&self) -> Result<Quote, YahooError> {
-        self.check_consistency()?;
-        let stock = &self.chart.result[0];
-        let n = stock.timestamp.len() - 1;
-        for i in (0..n).rev() {
-            let quote = stock.indicators.get_ith_quote(stock.timestamp[i], i);
-            if quote.is_ok() {
-                return quote;
-            }
-        }
-        Err(YahooError::EmptyDataSet)
-    }
-
-    pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
-        self.check_consistency()?;
-        let stock = &self.chart.result[0];
-        let mut quotes = Vec::new();
-        let n = stock.timestamp.len();
-        for i in 0..n {
-            let timestamp = stock.timestamp[i];
-            let quote = stock.indicators.get_ith_quote(timestamp, i);
-            if quote.is_ok() {
-                quotes.push(quote.unwrap());
-            }
-        }
-        Ok(quotes)
-    }
-}
-
-/// Struct for single quote
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Quote {
-    pub timestamp: u64,
-    pub open: f64,
-    pub high: f64,
-    pub low: f64,
-    pub volume: u64,
-    pub close: f64,
-    pub adjclose: f64,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct YChart {
-    pub result: Vec<YQuoteBlock>,
-    pub error: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct YQuoteBlock {
-    pub meta: YMetaData,
-    pub timestamp: Vec<u64>,
-    pub indicators: QuoteBlock,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct YMetaData {
-    pub currency: String,
-    pub symbol: String,
-    #[serde(rename = "exchangeName")]
-    pub exchange_name: String,
-    #[serde(rename = "instrumentType")]
-    pub instrument_type: String,
-    #[serde(rename = "firstTradeDate")]
-    pub first_trade_date: i32,
-    #[serde(rename = "regularMarketTime")]
-    pub regular_market_time: u32,
-    pub gmtoffset: i32,
-    pub timezone: String,
-    #[serde(rename = "exchangeTimezoneName")]
-    pub exchange_timezone_name: String,
-    #[serde(rename = "regularMarketPrice")]
-    pub regular_market_price: f64,
-    #[serde(rename = "chartPreviousClose")]
-    pub chart_previous_close: f64,
-    #[serde(default)]
-    #[serde(rename = "previousClose")]
-    pub previous_close: Option<f64>,
-    #[serde(default)]
-    pub scale: Option<i32>,
-    #[serde(rename = "priceHint")]
-    pub price_hint: i32,
-    #[serde(rename = "currentTradingPeriod")]
-    pub current_trading_period: TradingPeriod,
-    #[serde(default)]
-    #[serde(rename = "tradingPeriods")]
-    pub trading_periods: Option<Vec<Vec<PeriodInfo>>>,
-    #[serde(rename = "dataGranularity")]
-    pub data_granularity: String,
-    pub range: String,
-    #[serde(rename = "validRanges")]
-    pub valid_ranges: Vec<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct TradingPeriod {
-    pub pre: PeriodInfo,
-    pub regular: PeriodInfo,
-    pub post: PeriodInfo,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct PeriodInfo {
-    pub timezone: String,
-    pub start: u32,
-    pub end: u32,
-    pub gmtoffset: i32,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct QuoteBlock {
-    quote: Vec<QuoteList>,
-    #[serde(default)]
-    adjclose: Option<Vec<AdjClose>>,
-}
-
-impl QuoteBlock {
-    fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
-        let adjclose = match &self.adjclose {
-            Some(adjclose) => adjclose[0].adjclose[i],
-            None => None,
-        };
-        let quote = &self.quote[0];
-        // reject if close is not set
-        if quote.close[i].is_none() {
-            return Err(YahooError::EmptyDataSet);
-        }
-        Ok(Quote {
-            timestamp: timestamp,
-            open: quote.open[i].unwrap_or(0.0),
-            high: quote.high[i].unwrap_or(0.0),
-            low: quote.low[i].unwrap_or(0.0),
-            volume: quote.volume[i].unwrap_or(0),
-            close: quote.close[i].unwrap(),
-            adjclose: adjclose.unwrap_or(0.0),
-        })
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct AdjClose {
-    adjclose: Vec<Option<f64>>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct QuoteList {
-    pub volume: Vec<Option<u64>>,
-    pub high: Vec<Option<f64>>,
-    pub close: Vec<Option<f64>>,
-    pub low: Vec<Option<f64>>,
-    pub open: Vec<Option<f64>>,
-}
-
-#[derive(Debug)]
-pub enum YahooError {
-    FetchFailed(StatusCode),
-    DeserializeFailed(String),
-    ConnectionFailed,
-    InvalidStatusCode,
-    EmptyDataSet,
-    DataInconsistency,
-}
-
-impl std::error::Error for YahooError {
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        None
-    }
-}
-
-impl fmt::Display for YahooError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FetchFailed(status) => write!(
-                f,
-                "fetchin the data from yahoo! finance failed: with status code {}",
-                status
-            ),
-            Self::DeserializeFailed(s) => write!(
-                f,
-                "deserializing response from yahoo! finance failed: {}",
-                &s
-            ),
-            Self::ConnectionFailed => write!(f, "connection to yahoo! finance server failed"),
-            Self::InvalidStatusCode => write!(f, "yahoo! finance return invalid status code"),
-            Self::EmptyDataSet => write!(f, "yahoo! finance returned an empty data set"),
-            Self::DataInconsistency => write!(f, "yahoo! finance returned inconsistent data"),
-        }
-    }
-}
+macro_rules! YTICKER_QUERY {
+    () => {"{url}?q={name}"};
+} 
 
 /// Container for connection parameters to yahoo! finance server
 #[derive(Default)]
 pub struct YahooConnector {
     url: &'static str,
+    search_url: &'static str,
 }
 
 
@@ -370,6 +158,7 @@ impl YahooConnector {
     pub fn new() -> YahooConnector {
         YahooConnector {
             url: YCHART_URL,
+            search_url: YSEARCH_URL,
         }
     }
 }
@@ -411,7 +200,7 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
-        send_request(&url).await
+        YResponse::from_json(send_request(&url).await?)
     }
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval(
@@ -429,8 +218,15 @@ impl YahooConnector {
             end = end.timestamp(),
             interval = interval
         );
-        send_request(&url).await
+        YResponse::from_json(send_request(&url).await?)
     }
+
+    /// Retrieve the list of quotes found searching a given name
+    pub async fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+        let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
+        YSearchResult::from_json(send_request(&url).await?)
+    }
+
 }
 
 #[cfg(feature = "blocking")]
@@ -464,8 +260,9 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
-        send_request(&url)
+        YResponse::from_json(send_request(&url)?)
     }
+ 
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
     pub fn get_quote_history_interval(
         &self,
@@ -482,55 +279,44 @@ impl YahooConnector {
             end = end.timestamp(),
             interval = interval
         );
-        send_request(&url)
+        YResponse::from_json(send_request(&url)?)
+    }
+
+    /// Retrieve the list of quotes found searching a given name
+    pub fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+        let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
+        YSearchResult::from_json(send_request(&url)?)
     }
 }
 
 #[cfg(not(feature = "blocking"))]
 /// Send request to yahoo! finance server and transform response to JSON value
-async fn send_request(url: &str) -> Result<YResponse, YahooError> {
+async fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     let resp = reqwest::get(url).compat().await;
     if resp.is_err() {
         return Err(YahooError::ConnectionFailed);
     }
     let resp = resp.unwrap();
     match resp.status() {
-        StatusCode::OK => {
-            if let Ok(json) = resp.json().await {
-                match serde_json::from_value(json) {
-                    Ok(v) => Ok(v),
-                    Err(e) => Err(YahooError::DeserializeFailed(e.to_string())),
-                }
-            } else {
-                Err(YahooError::InvalidStatusCode)
-            }
-        }
-        status => Err(YahooError::FetchFailed(status)),
+        StatusCode::OK => resp.json().await.map_err(|_|{YahooError::InvalidJson}),
+        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status).to_string())),
     }
 }
 
 #[cfg(feature = "blocking")]
 /// Send request to yahoo! finance server and transform response to JSON value
-fn send_request(url: &str) -> Result<YResponse, YahooError> {
+fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     let resp = reqwest::blocking::get(url);
     if resp.is_err() {
         return Err(YahooError::ConnectionFailed);
     }
     let resp = resp.unwrap();
     match resp.status() {
-        StatusCode::OK => {
-            if let Ok(json) = resp.json() {
-                match serde_json::from_value(json) {
-                    Ok(v) => Ok(v),
-                    Err(e) => Err(YahooError::DeserializeFailed(e.to_string())),
-                }
-            } else {
-                Err(YahooError::InvalidStatusCode)
-            }
-        }
-        status => Err(YahooError::FetchFailed(status)),
+        StatusCode::OK => resp.json().map_err(|_|{YahooError::InvalidJson}),
+        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status).to_string())),
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -596,11 +382,13 @@ mod tests {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
-        let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end)).unwrap();
-
-        assert_eq!(resp.chart.result[0].timestamp.len(), 21);
-        let quotes = resp.quotes().unwrap();
-        assert_eq!(quotes.len(), 21);
+        let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end));
+        if resp.is_ok() {
+            let resp = resp.unwrap();
+            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+            let quotes = resp.quotes().unwrap();
+            assert_eq!(quotes.len(), 21);
+        }
     }
 
     #[cfg(not(feature = "blocking"))]
@@ -637,5 +425,23 @@ mod tests {
         let response = tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 5usize);
+    }
+
+    #[cfg(not(feature = "blocking"))]
+    #[test]
+    fn test_search_ticker() {
+        let provider = YahooConnector::new();
+        let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
+
+        assert_eq!(resp.count, 15);
+        let mut apple_found = false;
+        for item in resp.quotes 
+        {
+            if item.exchange == "NMS" && item.symbol == "AAPL" && item.longname == "Apple Inc." {
+                apple_found = true;
+                break;
+            }
+        }
+        assert!(apple_found)
     }
 }
