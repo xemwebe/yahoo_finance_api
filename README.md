@@ -46,6 +46,26 @@ fn main() {
 }
 
 ```
+
+Search for a ticker given a search string (e.g. company name):
+```rust
+use yahoo_finance_api as yahoo;
+use tokio_test;
+
+fn main() {
+    let provider = yahoo::YahooConnector::new();
+    let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
+
+    let mut apple_found = false;
+    println!("All tickers found while searching for 'Apple':");
+    for item in resp.quotes 
+    {
+        println!("{}", item.symbol)
+    }
+}
+
+```
+
 Another method to retrieve a range of quotes is by
 requesting the quotes for a given period and lookup frequency. Here is an example retrieving the daily quotes for the last month:
 

@@ -62,6 +62,24 @@ fn main() {
     println!(\"Apple's quotes of the last month: {:?}\", quotes);
 }
 ```
+
+# Search for a ticker given a search string (e.g. company name):
+```rust
+use yahoo_finance_api as yahoo;
+use tokio_test;
+
+fn main() {
+    let provider = yahoo::YahooConnector::new();
+    let resp = tokio_test::block_on(provider.search_ticker(\"Apple\")).unwrap();
+
+    let mut apple_found = false;
+    println!(\"All tickers found while searching for 'Apple':\");
+    for item in resp.quotes 
+    {
+        println!(\"{}\", item.symbol)
+    }
+}
+```
 ")]
 #![cfg_attr(feature="blocking", doc = "
 # Get the latest available quote (with blocking feature enabled):
@@ -114,6 +132,22 @@ fn main() {
     let response = provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\").unwrap();
     let quotes = response.quotes().unwrap();
     println!(\"Apple's quotes of the last month: {:?}\", quotes);
+}
+```
+# Search for a ticker given a search string (e.g. company name):
+```rust
+use yahoo_finance_api as yahoo;
+
+fn main() {
+    let provider = yahoo::YahooConnector::new();
+    let resp = provider.search_ticker(\"Apple\").unwrap();
+
+    let mut apple_found = false;
+    println!(\"All tickers found while searching for 'Apple':\");
+    for item in resp.quotes 
+    {
+        println!(\"{}\", item.symbol)
+    }
 }
 ```
 ")]
