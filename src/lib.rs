@@ -161,8 +161,8 @@ use tokio_compat_02::FutureExt;
 mod quotes;
 mod search_result;
 mod yahoo_error;
-pub use quotes::YResponse;
-pub use search_result::YSearchResult;
+pub use quotes::{YResponse, Quote, YChart, YQuoteBlock, YMetaData, TradingPeriod, PeriodInfo, QuoteBlock, AdjClose, QuoteList};
+pub use search_result::{YSearchResult, YQuoteItem, YNewsItem};
 pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
