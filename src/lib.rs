@@ -161,9 +161,9 @@ use tokio_compat_02::FutureExt;
 mod quotes;
 mod search_result;
 mod yahoo_error;
-use quotes::YResponse;
-use search_result::YSearchResult;
-use yahoo_error::YahooError;
+pub use quotes::YResponse;
+pub use search_result::YSearchResult;
+pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
