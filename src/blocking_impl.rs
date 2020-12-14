@@ -53,10 +53,17 @@ impl YahooConnector {
     }
 
     /// Retrieve the list of quotes found searching a given name
-    pub fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+    pub fn search_ticker_opt(&self, name: &str) -> Result<YSearchResultOpt, YahooError> {
         let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
-        YSearchResult::from_json(send_request(&url)?)
+        YSearchResultOpt::from_json(send_request(&url)?)
     }
+
+    /// Retrieve the list of quotes found searching a given name
+    pub fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+        let result = self.search_ticker_opt(name)?;
+        Ok(YSearchResult::from_opt(&result))
+    }
+
 }
 
 /// Send request to yahoo! finance server and transform response to JSON value

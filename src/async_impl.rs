@@ -59,9 +59,15 @@ impl YahooConnector {
     }
 
     /// Retrieve the list of quotes found searching a given name
-    pub async fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+    pub async fn search_ticker_opt(&self, name: &str) -> Result<YSearchResultOpt, YahooError> {
         let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
-        YSearchResult::from_json(send_request(&url).await?)
+        YSearchResultOpt::from_json(send_request(&url).await?)
+    }
+
+    /// Retrieve the list of quotes found searching a given name
+    pub async fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+        let result = self.search_ticker_opt(name).await?;
+        Ok(YSearchResult::from_opt(&result))
     }
 
 }
