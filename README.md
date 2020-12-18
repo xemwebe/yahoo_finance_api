@@ -65,6 +65,8 @@ fn main() {
 }
 
 ```
+Some fields like `longname` are only optional and will be replaced by default values if missing (e.g. empty string). If you do not like this behavior, use `search_ticker_opt` instead which
+contains `Option<String>` fields, returning `None` if the field found missing in the response.
 
 Another method to retrieve a range of quotes is by
 requesting the quotes for a given period and lookup frequency. Here is an example retrieving the daily quotes for the last month:

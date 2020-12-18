@@ -11,5 +11,6 @@ Cargo.lock
 
 # VS Code
 launch.json
+.vscode 
 
 /test_data/
