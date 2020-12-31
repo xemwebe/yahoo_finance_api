@@ -1,3 +1,6 @@
+## Release 1.1.5
+Upgrade to version 0.4.* of tokio-test
+
 ## Release 1.1.4
 Mainly bug fixes and exports added for most structs. 
 `search_result_opt` has been added, since sometimes not all fields are returned. These has been replaced by `Option<...>` type fields. The interface
