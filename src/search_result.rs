@@ -55,7 +55,6 @@ pub struct YSearchResult {
     pub news: Vec<YNewsItem>,
 }
 
-
 #[derive(Deserialize, Debug)]
 pub struct YQuoteItem {
     pub exchange: String,
@@ -76,15 +75,23 @@ pub struct YQuoteItem {
 
 impl YQuoteItem {
     fn from_yquote_item_opt(quote: &YQuoteItemOpt) -> YQuoteItem {
-        YQuoteItem{
+        YQuoteItem {
             exchange: quote.exchange.clone(),
-            short_name: quote.short_name.as_ref().unwrap_or(&("".to_string())).clone(),
+            short_name: quote
+                .short_name
+                .as_ref()
+                .unwrap_or(&("".to_string()))
+                .clone(),
             quote_type: quote.quote_type.clone(),
             symbol: quote.symbol.clone(),
             index: quote.index.clone(),
             score: quote.score,
             type_display: quote.type_display.clone(),
-            long_name: quote.long_name.as_ref().unwrap_or(&("".to_string())).clone(),
+            long_name: quote
+                .long_name
+                .as_ref()
+                .unwrap_or(&("".to_string()))
+                .clone(),
             is_yahoo_finance: quote.is_yahoo_finance,
         }
     }
@@ -100,7 +107,7 @@ fn remove_opt(quotes: &[YQuoteItemOpt]) -> Vec<YQuoteItem> {
 
 impl YSearchResult {
     pub fn from_opt(search_result_opt: &YSearchResultOpt) -> YSearchResult {
-        YSearchResult{
+        YSearchResult {
             count: search_result_opt.count,
             quotes: remove_opt(&search_result_opt.quotes),
             news: search_result_opt.news.clone(),

@@ -69,7 +69,6 @@ impl YahooConnector {
         let result = self.search_ticker_opt(name).await?;
         Ok(YSearchResult::from_opt(&result))
     }
-
 }
 
 /// Send request to yahoo! finance server and transform response to JSON value
@@ -80,11 +79,10 @@ async fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     }
     let resp = resp.unwrap();
     match resp.status() {
-        StatusCode::OK => resp.json().await.map_err(|_|{YahooError::InvalidJson}),
+        StatusCode::OK => resp.json().await.map_err(|_| YahooError::InvalidJson),
         status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -170,7 +168,8 @@ mod tests {
     #[test]
     fn test_large_volume() {
         let provider = YahooConnector::new();
-        let response = tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
+        let response =
+            tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
         let quotes = response.quotes().unwrap();
         assert!(quotes.len() > 0usize);
     }
@@ -182,8 +181,7 @@ mod tests {
 
         assert_eq!(resp.count, 15);
         let mut apple_found = false;
-        for item in resp.quotes 
-        {
+        for item in resp.quotes {
             if item.exchange == "NMS" && item.symbol == "AAPL" && item.short_name == "Apple Inc." {
                 apple_found = true;
                 break;
@@ -192,4 +190,3 @@ mod tests {
         assert!(apple_found)
     }
 }
-

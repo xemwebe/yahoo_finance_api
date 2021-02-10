@@ -134,8 +134,6 @@ pub struct YMetaData {
     pub valid_ranges: Vec<String>,
 }
 
-
-
 #[derive(Deserialize, Debug)]
 pub struct TradingPeriod {
     pub pre: PeriodInfo,
