@@ -62,8 +62,8 @@ impl YResponse {
         for i in 0..n {
             let timestamp = stock.timestamp[i];
             let quote = stock.indicators.get_ith_quote(timestamp, i);
-            if quote.is_ok() {
-                quotes.push(quote.unwrap());
+            if let Ok(q) = quote {
+                quotes.push(q);
             }
         }
         Ok(quotes)
@@ -170,7 +170,7 @@ impl QuoteBlock {
             return Err(YahooError::EmptyDataSet);
         }
         Ok(Quote {
-            timestamp: timestamp,
+            timestamp,
             open: quote.open[i].unwrap_or(0.0),
             high: quote.high[i].unwrap_or(0.0),
             low: quote.low[i].unwrap_or(0.0),

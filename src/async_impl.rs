@@ -81,7 +81,7 @@ async fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     let resp = resp.unwrap();
     match resp.status() {
         StatusCode::OK => resp.json().await.map_err(|_|{YahooError::InvalidJson}),
-        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status).to_string())),
+        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
     }
 }
 
