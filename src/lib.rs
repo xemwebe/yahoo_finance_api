@@ -159,9 +159,6 @@ fn main() {
 use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 
-#[cfg(not(feature = "blocking"))]
-use tokio_compat_02::FutureExt;
-
 mod quotes;
 mod search_result;
 mod yahoo_error;

@@ -1,8 +1,8 @@
-
 use super::*;
 
-impl YahooConnector {
+use async_compat::CompatExt;
 
+impl YahooConnector {
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
         &self,
