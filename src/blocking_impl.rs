@@ -67,16 +67,16 @@ impl YahooConnector {
 
 /// Send request to yahoo! finance server and transform response to JSON value
 fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
-    let resp = reqwest::blocking::get(url);
-    if resp.is_err() {
-        return Err(YahooError::ConnectionFailed);
-    }
-    let resp = resp.unwrap();
-    match resp.status() {
-        StatusCode::OK => resp.json().map_err(|_| YahooError::InvalidJson),
-        status => Err(YahooError::FetchFailed(
-            format!("Status Code: {}", status).to_string(),
-        )),
+    let resp = ureq::get(url).call();
+    if let Ok(resp) = resp {
+        match resp.status() {
+            200 => resp.into_json().map_err(|_| YahooError::InvalidJson),
+            status => Err(YahooError::FetchFailed(
+                format!("Status Code: {}", status),
+            )),
+        }
+    } else {
+        Err(YahooError::ConnectionFailed)
     }
 }
 

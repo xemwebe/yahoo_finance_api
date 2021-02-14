@@ -1,6 +1,7 @@
 use super::*;
 
 use async_compat::CompatExt;
+use reqwest::StatusCode;
 
 impl YahooConnector {
     /// Retrieve the quotes of the last day for the given ticker

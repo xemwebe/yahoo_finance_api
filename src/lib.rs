@@ -11,7 +11,7 @@
 //! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
 #![cfg_attr(
-    not(feature = "blocking"),
+    feature = "async",
     doc = "
 # Get the latest available quote:
 ```rust
@@ -89,7 +89,7 @@ returning `None` if the field found missing in the response.
 "
 )]
 #![cfg_attr(
-    feature = "blocking",
+    not(feature = "async"),
     doc = "
 # Get the latest available quote (with blocking feature enabled):
 ```rust
@@ -163,7 +163,6 @@ fn main() {
 )]
 
 use chrono::{DateTime, Utc};
-use reqwest::StatusCode;
 
 mod quotes;
 mod search_result;
@@ -212,7 +211,7 @@ impl YahooConnector {
     }
 }
 
-#[cfg(not(feature = "blocking"))]
+#[cfg(feature = "async")]
 pub mod async_impl;
 
 #[cfg(feature = "blocking")]

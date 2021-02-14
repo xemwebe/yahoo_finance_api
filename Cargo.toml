@@ -12,15 +12,22 @@ categories = ["api-bindings"]
 include = ["src/**/*", "LICENSE-*", "README.md"]
 
 [dependencies]
-reqwest = { version = "0.11", features = ["json", "rustls"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
-async-compat = "0.2"
+
+# async
+reqwest = { version = "0.11", features = ["json", "rustls"], optional = true }
+async-compat = { version = "0.2", optional = true }
+
+# blocking
+ureq = { version = "2.0", features = ["tls", "json"], default-features = false, optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
 
-
 [features]
-blocking = ["reqwest/blocking"]
+default = ["async"]
+
+async = ["reqwest", "async-compat"]
+blocking = ["ureq"]
