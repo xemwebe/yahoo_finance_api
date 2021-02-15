@@ -1,6 +1,23 @@
 use super::*;
 
-impl YahooConnector {
+/// Container for connection parameters to yahoo! finance server
+#[derive(Default)]
+pub struct YahooConnectorBlocking {
+    url: &'static str,
+    search_url: &'static str,
+}
+
+impl YahooConnectorBlocking {
+    /// Constructor for a new instance of the yahoo  connector.
+    pub fn new() -> Self {
+        Self {
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        }
+    }
+}
+
+impl YahooConnectorBlocking {
     /// Retrieve the quotes of the last day for the given ticker
     pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         self.get_quote_range(ticker, interval, "1d")
@@ -71,9 +88,7 @@ fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     if let Ok(resp) = resp {
         match resp.status() {
             200 => resp.into_json().map_err(|_| YahooError::InvalidJson),
-            status => Err(YahooError::FetchFailed(
-                format!("Status Code: {}", status),
-            )),
+            status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
         }
     } else {
         Err(YahooError::ConnectionFailed)
@@ -87,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_get_quote_history() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorBlocking::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
         let resp = provider.get_quote_history("AAPL", start, end).unwrap();

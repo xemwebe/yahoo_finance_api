@@ -3,7 +3,24 @@ use super::*;
 use async_compat::CompatExt;
 use reqwest::StatusCode;
 
-impl YahooConnector {
+/// Container for connection parameters to yahoo! finance server
+#[derive(Default)]
+pub struct YahooConnectorAsync {
+    url: &'static str,
+    search_url: &'static str,
+}
+
+impl YahooConnectorAsync {
+    /// Constructor for a new instance of the yahoo  connector.
+    pub fn new() -> Self {
+        Self {
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        }
+    }
+}
+
+impl YahooConnectorAsync {
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
         &self,
@@ -92,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_get_single_quote() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1m")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
@@ -103,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_strange_api_responses() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let start = Utc.ymd(2019, 7, 3).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 7, 4).and_hms_milli(23, 59, 59, 999);
         let resp = tokio_test::block_on(provider.get_quote_history("IBM", start, end)).unwrap();
@@ -118,7 +135,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "DeserializeFailed(\"missing field `adjclose`\")")]
     fn test_api_responses_missing_fields() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
@@ -129,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_get_quote_history() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
         let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end));
@@ -143,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_get_quote_range() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let response =
             tokio_test::block_on(provider.get_quote_range("HNL.DE", "1d", "1mo")).unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
@@ -154,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
         let response =
@@ -168,7 +185,7 @@ mod tests {
 
     #[test]
     fn test_large_volume() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let response =
             tokio_test::block_on(provider.get_quote_range("BTC-USD", "1d", "5d")).unwrap();
         let quotes = response.quotes().unwrap();
@@ -177,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_search_ticker() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnectorAsync::new();
         let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
 
         assert_eq!(resp.count, 15);

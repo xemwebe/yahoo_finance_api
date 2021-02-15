@@ -11,7 +11,7 @@
 //! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
 #![cfg_attr(
-    feature = "async",
+    not(feature = "blocking"),
     doc = "
 # Get the latest available quote:
 ```rust
@@ -76,20 +76,20 @@ fn main() {
 
     let mut apple_found = false;
     println!(\"All tickers found while searching for 'Apple':\");
-    for item in resp.quotes 
+    for item in resp.quotes
     {
         println!(\"{}\", item.symbol)
     }
 }
 ```
-Some fields like `longname` are only optional and will be replaced by default 
-values if missing (e.g. empty string). If you do not like this behavior, 
-use `search_ticker_opt` instead which contains `Option<String>` fields, 
+Some fields like `longname` are only optional and will be replaced by default
+values if missing (e.g. empty string). If you do not like this behavior,
+use `search_ticker_opt` instead which contains `Option<String>` fields,
 returning `None` if the field found missing in the response.
 "
 )]
 #![cfg_attr(
-    not(feature = "async"),
+    feature = "blocking",
     doc = "
 # Get the latest available quote (with blocking feature enabled):
 ```rust
@@ -153,7 +153,7 @@ fn main() {
 
     let mut apple_found = false;
     println!(\"All tickers found while searching for 'Apple':\");
-    for item in resp.quotes 
+    for item in resp.quotes
     {
         println!(\"{}\", item.symbol)
     }
@@ -167,6 +167,7 @@ use chrono::{DateTime, Utc};
 mod quotes;
 mod search_result;
 mod yahoo_error;
+
 pub use quotes::{
     AdjClose, PeriodInfo, Quote, QuoteBlock, QuoteList, TradingPeriod, YChart, YMetaData,
     YQuoteBlock, YResponse,
@@ -194,25 +195,14 @@ macro_rules! YTICKER_QUERY {
     };
 }
 
-/// Container for connection parameters to yahoo! finance server
-#[derive(Default)]
-pub struct YahooConnector {
-    url: &'static str,
-    search_url: &'static str,
-}
-
-impl YahooConnector {
-    /// Constructor for a new instance of the yahoo  connector.
-    pub fn new() -> YahooConnector {
-        YahooConnector {
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        }
-    }
-}
-
 #[cfg(feature = "async")]
 pub mod async_impl;
 
 #[cfg(feature = "blocking")]
 pub mod blocking_impl;
+
+#[cfg(not(feature = "blocking"))]
+pub type YahooConnector = async_impl::YahooConnectorAsync;
+
+#[cfg(feature = "blocking")]
+pub type YahooConnector = blocking_impl::YahooConnectorBlocking;
