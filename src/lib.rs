@@ -8,9 +8,11 @@
 //! Therefore, the functions need to be called from within another ```async``` function with ```.await``` or via functions like ```block_on```.
 //! The examples are based on the ```tokio``` runtime applying the ```tokio-test``` crate.
 //!
-//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`. 
+//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
-#![cfg_attr(not(feature="blocking"), doc = "
+#![cfg_attr(
+    not(feature = "blocking"),
+    doc = "
 # Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -84,8 +86,11 @@ Some fields like `longname` are only optional and will be replaced by default
 values if missing (e.g. empty string). If you do not like this behavior, 
 use `search_ticker_opt` instead which contains `Option<String>` fields, 
 returning `None` if the field found missing in the response.
-")]
-#![cfg_attr(feature="blocking", doc = "
+"
+)]
+#![cfg_attr(
+    feature = "blocking",
+    doc = "
 # Get the latest available quote (with blocking feature enabled):
 ```rust
 use yahoo_finance_api as yahoo;
@@ -154,34 +159,41 @@ fn main() {
     }
 }
 ```
-")]
+"
+)]
 
 use chrono::{DateTime, Utc};
 use reqwest::StatusCode;
 
-#[cfg(not(feature = "blocking"))]
-use tokio_compat_02::FutureExt;
-
 mod quotes;
 mod search_result;
 mod yahoo_error;
-pub use quotes::{YResponse, Quote, YChart, YQuoteBlock, YMetaData, TradingPeriod, PeriodInfo, QuoteBlock, AdjClose, QuoteList};
-pub use search_result::{YSearchResultOpt, YQuoteItemOpt, YSearchResult, YQuoteItem, YNewsItem};
+pub use quotes::{
+    AdjClose, PeriodInfo, Quote, QuoteBlock, QuoteList, TradingPeriod, YChart, YMetaData,
+    YQuoteBlock, YResponse,
+};
+pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt};
 pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
 
-// Macros instead of constants, 
+// Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
-    () => {"{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}"};
+    () => {
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}"
+    };
 }
 macro_rules! YCHART_RANGE_QUERY {
-    () => {"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"};
-} 
+    () => {
+        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}"
+    };
+}
 macro_rules! YTICKER_QUERY {
-    () => {"{url}?q={name}"};
-} 
+    () => {
+        "{url}?q={name}"
+    };
+}
 
 /// Container for connection parameters to yahoo! finance server
 #[derive(Default)]
@@ -189,7 +201,6 @@ pub struct YahooConnector {
     url: &'static str,
     search_url: &'static str,
 }
-
 
 impl YahooConnector {
     /// Constructor for a new instance of the yahoo  connector.

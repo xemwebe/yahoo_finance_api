@@ -1,8 +1,8 @@
-use yahoo_finance_api as yahoo;
-#[cfg(not(feature="blocking"))]
+#[cfg(not(feature = "blocking"))]
 use tokio_test;
+use yahoo_finance_api as yahoo;
 
-#[cfg(not(feature="blocking"))]
+#[cfg(not(feature = "blocking"))]
 fn get_quote() -> Result<f64, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
@@ -12,7 +12,7 @@ fn get_quote() -> Result<f64, yahoo::YahooError> {
     Ok(quote.close)
 }
 
-#[cfg(feature="blocking")]
+#[cfg(feature = "blocking")]
 fn get_quote() -> Result<f64, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
@@ -21,7 +21,6 @@ fn get_quote() -> Result<f64, yahoo::YahooError> {
     let quote = response.last_quote()?;
     Ok(quote.close)
 }
-
 
 fn main() {
     let quote = get_quote().unwrap();

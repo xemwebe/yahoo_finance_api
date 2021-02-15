@@ -9,13 +9,14 @@ repository = "https://github.com/xemwebe/yahoo_finance_api"
 readme = "README.md"
 keywords = ["finance", "yahoo", "stock", "quote"]
 categories = ["api-bindings"]
+include = ["src/**/*", "LICENSE-*", "README.md"]
 
 [dependencies]
-reqwest = { version = "0.10", features = ["json", "rustls"] }
+reqwest = { version = "0.11", features = ["json", "rustls"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 chrono = "0.4"
-tokio-compat-02 = "0.1"
+async-compat = "0.2"
 
 [dev-dependencies]
 tokio-test = "0.4"

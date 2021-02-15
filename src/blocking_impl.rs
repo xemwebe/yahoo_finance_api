@@ -32,7 +32,7 @@ impl YahooConnector {
         );
         YResponse::from_json(send_request(&url)?)
     }
- 
+
     /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
     pub fn get_quote_history_interval(
         &self,
@@ -63,7 +63,6 @@ impl YahooConnector {
         let result = self.search_ticker_opt(name)?;
         Ok(YSearchResult::from_opt(&result))
     }
-
 }
 
 /// Send request to yahoo! finance server and transform response to JSON value
@@ -74,8 +73,10 @@ fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
     }
     let resp = resp.unwrap();
     match resp.status() {
-        StatusCode::OK => resp.json().map_err(|_|{YahooError::InvalidJson}),
-        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status).to_string())),
+        StatusCode::OK => resp.json().map_err(|_| YahooError::InvalidJson),
+        status => Err(YahooError::FetchFailed(
+            format!("Status Code: {}", status).to_string(),
+        )),
     }
 }
 
