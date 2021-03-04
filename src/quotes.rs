@@ -23,8 +23,7 @@ impl YResponse {
             {
                 return Err(YahooError::DataInconsistency);
             }
-            if stock.indicators.adjclose.is_some() {
-                let adjclose = stock.indicators.adjclose.as_ref().unwrap();
+            if let Some(ref adjclose) = stock.indicators.adjclose {
                 if adjclose[0].adjclose.len() != n {
                     return Err(YahooError::DataInconsistency);
                 }
@@ -34,10 +33,7 @@ impl YResponse {
     }
 
     pub fn from_json(json: serde_json::Value) -> Result<YResponse, YahooError> {
-        match serde_json::from_value(json) {
-            Ok(v) => Ok(v),
-            Err(e) => Err(YahooError::DeserializeFailed(e.to_string())),
-        }
+        serde_json::from_value(json).map_err(|e| YahooError::DeserializeFailed(e.to_string()))
     }
 
     /// Return the latest valid quote
@@ -96,41 +92,29 @@ pub struct YQuoteBlock {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct YMetaData {
     pub currency: String,
     pub symbol: String,
-    #[serde(rename = "exchangeName")]
     pub exchange_name: String,
-    #[serde(rename = "instrumentType")]
     pub instrument_type: String,
-    #[serde(rename = "firstTradeDate")]
     pub first_trade_date: i32,
-    #[serde(rename = "regularMarketTime")]
     pub regular_market_time: u32,
     pub gmtoffset: i32,
     pub timezone: String,
-    #[serde(rename = "exchangeTimezoneName")]
     pub exchange_timezone_name: String,
-    #[serde(rename = "regularMarketPrice")]
     pub regular_market_price: f64,
-    #[serde(rename = "chartPreviousClose")]
     pub chart_previous_close: f64,
     #[serde(default)]
-    #[serde(rename = "previousClose")]
     pub previous_close: Option<f64>,
     #[serde(default)]
     pub scale: Option<i32>,
-    #[serde(rename = "priceHint")]
     pub price_hint: i32,
-    #[serde(rename = "currentTradingPeriod")]
     pub current_trading_period: TradingPeriod,
     #[serde(default)]
-    #[serde(rename = "tradingPeriods")]
     pub trading_periods: Option<Vec<Vec<PeriodInfo>>>,
-    #[serde(rename = "dataGranularity")]
     pub data_granularity: String,
     pub range: String,
-    #[serde(rename = "validRanges")]
     pub valid_ranges: Vec<String>,
 }
 
