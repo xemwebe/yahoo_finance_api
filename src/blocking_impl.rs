@@ -6,7 +6,7 @@ impl YahooConnector {
         self.get_quote_range(ticker, interval, "1d")
     }
 
-    /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available
+    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available
     pub fn get_quote_history(
         &self,
         ticker: &str,
@@ -33,7 +33,7 @@ impl YahooConnector {
         YResponse::from_json(send_request(&url)?)
     }
 
-    /// Retrieve the quote history for the given ticker form date start to end (inklusive), if available; specifying the interval of the ticker.
+    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
     pub fn get_quote_history_interval(
         &self,
         ticker: &str,
