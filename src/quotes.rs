@@ -78,7 +78,9 @@ impl YResponse {
         let stock = &self.chart.result[0];
         if let Some(events) = &stock.events {
             if let Some(splits) = &events.splits {
-                return Ok(splits.values().cloned().collect());
+                let mut data = splits.values().cloned().collect::<Vec<Split>>();
+                data.sort_unstable_by_key(|d| d.date);
+                return Ok(data);
             }
         }
         Ok(vec![])
@@ -92,7 +94,9 @@ impl YResponse {
         let stock = &self.chart.result[0];
         if let Some(events) = &stock.events {
             if let Some(dividends) = &events.dividends {
-                return Ok(dividends.values().cloned().collect());
+                let mut data = dividends.values().cloned().collect::<Vec<Dividend>>();
+                data.sort_unstable_by_key(|d| d.date);
+                return Ok(data);
             }
         }
         Ok(vec![])
