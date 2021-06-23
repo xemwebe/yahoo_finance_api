@@ -170,7 +170,7 @@ mod search_result;
 mod yahoo_error;
 pub use quotes::{
     AdjClose, PeriodInfo, Quote, QuoteBlock, QuoteList, TradingPeriod, YChart, YMetaData,
-    YQuoteBlock, YResponse,
+    YQuoteBlock, YResponse, Split, Dividend
 };
 pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt};
 pub use yahoo_error::YahooError;
