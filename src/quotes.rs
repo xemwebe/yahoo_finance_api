@@ -242,12 +242,12 @@ pub struct Split {
     /// wherever you had one before the split. (Here the numerator is 1 and 
     /// denom is 5). A reverse split is considered as nothing but a regular 
     /// split with a numerator > denom.
-    pub numerator: u8,
+    pub numerator: u64,
     /// Denominator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and 
     /// denom is 5). A reverse split is considered as nothing but a regular 
     /// split with a numerator > denom.
-    pub denominator: u8,
+    pub denominator: u64,
     /// A textual representation of the split.
     #[serde(rename = "splitRatio")]
     pub split_ratio: String,
