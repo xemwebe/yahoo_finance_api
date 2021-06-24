@@ -10,11 +10,11 @@ pub struct YSearchResultOpt {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct YQuoteItemOpt {
     pub exchange: String,
     #[serde(rename = "shortname")]
     pub short_name: Option<String>,
-    #[serde(rename = "quoteType")]
     pub quote_type: String,
     pub symbol: String,
     pub index: String,
@@ -23,7 +23,6 @@ pub struct YQuoteItemOpt {
     pub type_display: String,
     #[serde(rename = "longname")]
     pub long_name: Option<String>,
-    #[serde(rename = "isYahooFinance")]
     pub is_yahoo_finance: bool,
 }
 
@@ -56,11 +55,11 @@ pub struct YSearchResult {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct YQuoteItem {
     pub exchange: String,
     #[serde(rename = "shortname")]
     pub short_name: String,
-    #[serde(rename = "quoteType")]
     pub quote_type: String,
     pub symbol: String,
     pub index: String,
@@ -69,7 +68,6 @@ pub struct YQuoteItem {
     pub type_display: String,
     #[serde(rename = "longname")]
     pub long_name: String,
-    #[serde(rename = "isYahooFinance")]
     pub is_yahoo_finance: bool,
 }
 
