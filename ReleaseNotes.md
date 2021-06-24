@@ -1,3 +1,6 @@
+## Release 1.2.0
+Added support for dividends and stock splits, see the new examples for splits and dividends and some code clean-up.
+
 ## Release 1.1.5
 Upgrade to version 0.4.* of tokio-test
 

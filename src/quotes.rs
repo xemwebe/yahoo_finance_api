@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 use super::YahooError;
@@ -64,6 +66,37 @@ impl YResponse {
         }
         Ok(quotes)
     }
+
+    /// This method retrieves information about the splits that might have
+    /// occured during the considered time period
+    pub fn splits(&self) -> Result<Vec<Split>, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        if let Some(events) = &stock.events {
+            if let Some(splits) = &events.splits {
+                let mut data = splits.values().cloned().collect::<Vec<Split>>();
+                data.sort_unstable_by_key(|d| d.date);
+                return Ok(data);
+            }
+        }
+        Ok(vec![])
+    }
+    /// This method retrieves information about the dividends that have
+    /// been recorded during the considered time period. 
+    ///
+    /// Note: Date is the ex-dividend date)
+    pub fn dividends(&self) -> Result<Vec<Dividend>, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        if let Some(events) = &stock.events {
+            if let Some(dividends) = &events.dividends {
+                let mut data = dividends.values().cloned().collect::<Vec<Dividend>>();
+                data.sort_unstable_by_key(|d| d.date);
+                return Ok(data);
+            }
+        }
+        Ok(vec![])
+    }
 }
 
 /// Struct for single quote
@@ -88,6 +121,7 @@ pub struct YChart {
 pub struct YQuoteBlock {
     pub meta: YMetaData,
     pub timestamp: Vec<u64>,
+    pub events: Option<EventsBlock>,
     pub indicators: QuoteBlock,
 }
 
@@ -175,4 +209,39 @@ pub struct QuoteList {
     pub close: Vec<Option<f64>>,
     pub low: Vec<Option<f64>>,
     pub open: Vec<Option<f64>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EventsBlock {
+    pub splits: Option<HashMap<u64, Split>>,
+    pub dividends: Option<HashMap<u64, Dividend>>,
+}
+
+/// This structure simply models a split that has occured.
+#[derive(Deserialize, Debug, Clone)]
+pub struct Split {
+    /// This is the date (timestamp) when the split occured
+    pub date: u64,
+    /// Numerator of the split. For instance a 1:5 split means you get 5 share
+    /// wherever you had one before the split. (Here the numerator is 1 and 
+    /// denom is 5). A reverse split is considered as nothing but a regular 
+    /// split with a numerator > denom.
+    pub numerator: u64,
+    /// Denominator of the split. For instance a 1:5 split means you get 5 share
+    /// wherever you had one before the split. (Here the numerator is 1 and 
+    /// denom is 5). A reverse split is considered as nothing but a regular 
+    /// split with a numerator > denom.
+    pub denominator: u64,
+    /// A textual representation of the split.
+    #[serde(rename = "splitRatio")]
+    pub split_ratio: String,
+}
+
+/// This structure simply models a dividend which has been recorded.
+#[derive(Deserialize, Debug, Clone)]
+pub struct Dividend {
+    /// This is the price of the dividend
+    pub amount: f64,
+    /// This is the ex-dividend date
+    pub date: u64,
 }
