@@ -1,3 +1,9 @@
+## Release 1.2.2
+Bug fix in indexation, which in some cases caused failures when fetching the latest quote.
+
+## Release 1.2.1
+New example with blocking feature.
+
 ## Release 1.2.0
 Added support for dividends and stock splits, see the new examples for splits and dividends and some code clean-up.
 
