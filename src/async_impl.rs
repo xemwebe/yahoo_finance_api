@@ -94,7 +94,7 @@ mod tests {
         let provider = YahooConnector::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1d")).unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
-        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
