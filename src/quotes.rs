@@ -42,7 +42,7 @@ impl YResponse {
     pub fn last_quote(&self) -> Result<Quote, YahooError> {
         self.check_consistency()?;
         let stock = &self.chart.result[0];
-        let n = stock.timestamp.len() - 1;
+        let n = stock.timestamp.len();
         for i in (0..n).rev() {
             let quote = stock.indicators.get_ith_quote(stock.timestamp[i], i);
             if quote.is_ok() {

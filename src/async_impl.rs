@@ -92,11 +92,10 @@ mod tests {
     #[test]
     fn test_get_single_quote() {
         let provider = YahooConnector::new();
-        let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1m")).unwrap();
-
+        let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1d")).unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1d");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
 
@@ -189,4 +188,42 @@ mod tests {
         }
         assert!(apple_found)
     }
+
+    #[test]
+    fn test_mutual_fund_history() {
+        let provider = YahooConnector::new();
+        let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
+        let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+        let resp = tokio_test::block_on(provider.get_quote_history("VTSAX", start, end));
+        if resp.is_ok() {
+            let resp = resp.unwrap();
+            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+            let quotes = resp.quotes().unwrap();
+            assert_eq!(quotes.len(), 21);
+            println!("{:?}", quotes);
+        }
+    }
+
+    #[test]
+    fn test_mutual_fund_latest() {
+        let provider = YahooConnector::new();
+        let response = tokio_test::block_on(provider.get_latest_quotes("VTSAX", "1m")).unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
+        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let _ = response.last_quote().unwrap();
+    }
+
+    
+    #[test]
+    fn test_mutual_fund_range() {
+        let provider = YahooConnector::new();
+        let response =
+            tokio_test::block_on(provider.get_quote_range("VTSAX", "1d", "1mo")).unwrap();
+        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+    }
+
 }
