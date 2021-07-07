@@ -9,7 +9,7 @@ impl YahooConnector {
         ticker: &str,
         interval: &str,
     ) -> Result<YResponse, YahooError> {
-        self.get_quote_range(ticker, interval, "1d").await
+        self.get_quote_range(ticker, interval, "1mo").await
     }
 
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available
@@ -37,6 +37,7 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
+        println!("url: {:?}", url);
         YResponse::from_json(send_request(&url).await?)
     }
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
@@ -207,10 +208,10 @@ mod tests {
     #[test]
     fn test_mutual_fund_latest() {
         let provider = YahooConnector::new();
-        let response = tokio_test::block_on(provider.get_latest_quotes("VTSAX", "1m")).unwrap();
+        let response = tokio_test::block_on(provider.get_latest_quotes("VTSAX", "1d")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
-        assert_eq!(&response.chart.result[0].meta.range, "1d");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
