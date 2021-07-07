@@ -37,7 +37,6 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
-        println!("url: {:?}", url);
         YResponse::from_json(send_request(&url).await?)
     }
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
