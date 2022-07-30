@@ -162,15 +162,17 @@ fn main() {
 "
 )]
 
+use std::{sync::Arc, time::Duration};
+
 use chrono::{DateTime, Utc};
-use reqwest::StatusCode;
+use reqwest::{Client, ClientBuilder, StatusCode};
 
 mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, PeriodInfo, Quote, QuoteBlock, QuoteList, TradingPeriod, YChart, YMetaData,
-    YQuoteBlock, YResponse, Split, Dividend
+    AdjClose, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
+    YMetaData, YQuoteBlock, YResponse,
 };
 pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt};
 pub use yahoo_error::YahooError;
@@ -198,17 +200,47 @@ macro_rules! YTICKER_QUERY {
 /// Container for connection parameters to yahoo! finance server
 #[derive(Default)]
 pub struct YahooConnector {
+    client: Arc<Client>,
     url: &'static str,
     search_url: &'static str,
+}
+
+#[derive(Default)]
+pub struct YahooConnectorBuilder {
+    inner: ClientBuilder,
 }
 
 impl YahooConnector {
     /// Constructor for a new instance of the yahoo  connector.
     pub fn new() -> YahooConnector {
         YahooConnector {
+            client: Arc::from(Client::default()),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
         }
+    }
+
+    pub fn builder() -> YahooConnectorBuilder {
+        YahooConnectorBuilder {
+            inner: reqwest::Client::builder(),
+        }
+    }
+}
+
+impl YahooConnectorBuilder {
+    pub fn build(self) -> YahooConnector {
+        let builder = reqwest::Client::builder();
+
+        YahooConnector {
+            client: Arc::from(builder.build().unwrap()),
+            ..Default::default()
+        }
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.inner = self.inner.timeout(timeout);
+
+        self
     }
 }
 

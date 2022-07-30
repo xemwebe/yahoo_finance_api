@@ -7,11 +7,15 @@ use yahoo_finance_api as yahoo;
 #[cfg(not(feature = "blocking"))]
 #[tokio::main]
 async fn main() {
-    let conn   = yahoo::YahooConnector::new();
+    let conn = yahoo::YahooConnector::new();
     let ticker = "OKE";
-    let start  = DateTime::parse_from_rfc3339("2020-07-25T00:00:00.00Z").unwrap().with_timezone(&Utc);
-    let end    = DateTime::parse_from_rfc3339("2020-11-01T00:00:00.00Z").unwrap().with_timezone(&Utc);
-    let hist  = conn.get_quote_history(ticker, start, end).await.unwrap();
+    let start = DateTime::parse_from_rfc3339("2020-07-25T00:00:00.00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let end = DateTime::parse_from_rfc3339("2020-11-01T00:00:00.00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let hist = conn.get_quote_history(ticker, start, end).await.unwrap();
 
     println!("{}", ticker);
     println!("QUOTES");
@@ -30,11 +34,15 @@ async fn main() {
 
 #[cfg(feature = "blocking")]
 fn main() {
-    let conn   = yahoo::YahooConnector::new();
+    let conn = yahoo::YahooConnector::new();
     let ticker = "OKE";
-    let start  = DateTime::parse_from_rfc3339("2020-07-25T00:00:00.00Z").unwrap().with_timezone(&Utc);
-    let end    = DateTime::parse_from_rfc3339("2020-11-01T00:00:00.00Z").unwrap().with_timezone(&Utc);
-    let hist  = conn.get_quote_history(ticker, start, end).unwrap();
+    let start = DateTime::parse_from_rfc3339("2020-07-25T00:00:00.00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let end = DateTime::parse_from_rfc3339("2020-11-01T00:00:00.00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    let hist = conn.get_quote_history(ticker, start, end).unwrap();
 
     println!("{}", ticker);
     println!("QUOTES");
