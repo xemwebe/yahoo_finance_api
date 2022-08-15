@@ -70,15 +70,11 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
-        let resp = self.client.get(url).send().await;
+        let resp = self.client.get(url).send().await?;
 
-        if resp.is_err() {
-            return Err(YahooError::ConnectionFailed);
-        }
-        let resp = resp.unwrap();
         match resp.status() {
-            StatusCode::OK => resp.json().await.map_err(|_| YahooError::InvalidJson),
-            status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
+            StatusCode::OK => Ok(resp.json().await?),
+            status => Err(YahooError::FetchFailed(format!("{}", status))),
         }
     }
 }
@@ -113,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "DeserializeFailed(\"missing field `adjclose`\")")]
+    #[should_panic(expected = "DeserializeFailed")]
     fn test_api_responses_missing_fields() {
         let provider = YahooConnector::new();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();

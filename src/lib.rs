@@ -162,10 +162,13 @@ fn main() {
 "
 )]
 
-use std::{sync::Arc, time::Duration};
+#[cfg(not(feature = "blocking"))]
+use std::{time::Duration};
 
 use chrono::{DateTime, Utc};
-use reqwest::{Client, ClientBuilder, StatusCode};
+#[cfg(not(feature = "blocking"))]
+use reqwest::{Client, ClientBuilder};
+use reqwest::StatusCode;
 
 mod quotes;
 mod search_result;
@@ -200,26 +203,30 @@ macro_rules! YTICKER_QUERY {
 /// Container for connection parameters to yahoo! finance server
 #[derive(Default)]
 pub struct YahooConnector {
-    client: Arc<Client>,
+    #[cfg(not(feature = "blocking"))]
+    client: Client,
     url: &'static str,
     search_url: &'static str,
 }
 
+#[cfg(not(feature = "blocking"))]
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,
 }
 
 impl YahooConnector {
-    /// Constructor for a new instance of the yahoo  connector.
+    /// Constructor for a new instance of the yahoo connector.
     pub fn new() -> YahooConnector {
         YahooConnector {
-            client: Arc::from(Client::default()),
+            #[cfg(not(feature = "blocking"))]
+            client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
         }
     }
 
+    #[cfg(not(feature = "blocking"))]
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
             inner: reqwest::Client::builder(),
@@ -227,14 +234,17 @@ impl YahooConnector {
     }
 }
 
+#[cfg(not(feature = "blocking"))]
 impl YahooConnectorBuilder {
-    pub fn build(self) -> YahooConnector {
+    pub fn build(self) -> Result<YahooConnector, YahooError> {
+        #[cfg(not(feature = "blocking"))]
         let builder = reqwest::Client::builder();
 
-        YahooConnector {
-            client: Arc::from(builder.build().unwrap()),
+        Ok(YahooConnector {
+            #[cfg(not(feature = "blocking"))]
+            client: builder.build()?,
             ..Default::default()
-        }
+        })
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {

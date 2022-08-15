@@ -1,39 +1,19 @@
-use serde::Deserialize;
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug, Deserialize)]
+#[derive(Error, Debug)]
 pub enum YahooError {
+    #[error("fetching the data from yahoo! finance failed")]
     FetchFailed(String),
-    DeserializeFailed(String),
-    ConnectionFailed,
+    #[error("deserializing response from yahoo! finance failed")]
+    DeserializeFailed(#[from] serde_json::Error),
+    #[error("connection to yahoo! finance server failed")]
+    ConnectionFailed(#[from] reqwest::Error),
+    #[error("yahoo! finance return invalid JSON format")]
     InvalidJson,
+    #[error("yahoo! finance returned an empty data set")]
     EmptyDataSet,
+    #[error("yahoo! finance returned inconsistent data")]
     DataInconsistency,
-}
-
-impl std::error::Error for YahooError {
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        None
-    }
-}
-
-impl fmt::Display for YahooError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FetchFailed(status) => write!(
-                f,
-                "fetching the data from yahoo! finance failed: with status code {}",
-                status
-            ),
-            Self::DeserializeFailed(s) => write!(
-                f,
-                "deserializing response from yahoo! finance failed: {}",
-                &s
-            ),
-            Self::ConnectionFailed => write!(f, "connection to yahoo! finance server failed"),
-            Self::InvalidJson => write!(f, "yahoo! finance return invalid JSON format"),
-            Self::EmptyDataSet => write!(f, "yahoo! finance returned an empty data set"),
-            Self::DataInconsistency => write!(f, "yahoo! finance returned inconsistent data"),
-        }
-    }
+    #[error("construcing yahoo! finance client failed")]
+    BuilderFailed,
 }

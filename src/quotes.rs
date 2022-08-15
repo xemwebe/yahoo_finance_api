@@ -35,7 +35,7 @@ impl YResponse {
     }
 
     pub fn from_json(json: serde_json::Value) -> Result<YResponse, YahooError> {
-        serde_json::from_value(json).map_err(|e| YahooError::DeserializeFailed(e.to_string()))
+        Ok(serde_json::from_value(json)?)
     }
 
     /// Return the latest valid quote

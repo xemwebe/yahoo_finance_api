@@ -1,3 +1,10 @@
+## Release 1.3.0
+`unwrap()` removed
+Switch to using `thiserror` crate for error propagation
+Using `Client` instance of reqwest.
+Error message have possibly changed and method `build()` could fail now.
+New Feature: Stop request on timeout
+
 ## Release 1.2.2
 Bug fix in indexation, which in some cases caused failures when fetching the latest quote.
 

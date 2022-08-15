@@ -9,7 +9,7 @@ use yahoo_finance_api as yahoo;
 async fn main() {
     let conn = yahoo::YahooConnector::builder()
         .timeout(Duration::from_secs(3))
-        .build();
+        .build().unwrap();
 
     let ticker = "TSLA";
     let start = DateTime::parse_from_rfc3339("2020-08-28T00:00:00.00Z")
