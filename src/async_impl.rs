@@ -1,7 +1,5 @@
 use super::*;
 
-use async_compat::CompatExt;
-
 impl YahooConnector {
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
@@ -37,7 +35,7 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
-        YResponse::from_json(send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)
     }
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval(
@@ -55,13 +53,13 @@ impl YahooConnector {
             end = end.timestamp(),
             interval = interval
         );
-        YResponse::from_json(send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)
     }
 
     /// Retrieve the list of quotes found searching a given name
     pub async fn search_ticker_opt(&self, name: &str) -> Result<YSearchResultOpt, YahooError> {
         let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
-        YSearchResultOpt::from_json(send_request(&url).await?)
+        YSearchResultOpt::from_json(self.send_request(&url).await?)
     }
 
     /// Retrieve the list of quotes found searching a given name
@@ -69,18 +67,19 @@ impl YahooConnector {
         let result = self.search_ticker_opt(name).await?;
         Ok(YSearchResult::from_opt(&result))
     }
-}
 
-/// Send request to yahoo! finance server and transform response to JSON value
-async fn send_request(url: &str) -> Result<serde_json::Value, YahooError> {
-    let resp = reqwest::get(url).compat().await;
-    if resp.is_err() {
-        return Err(YahooError::ConnectionFailed);
-    }
-    let resp = resp.unwrap();
-    match resp.status() {
-        StatusCode::OK => resp.json().await.map_err(|_| YahooError::InvalidJson),
-        status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
+    /// Send request to yahoo! finance server and transform response to JSON value
+    async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
+        let resp = self.client.get(url).send().await;
+
+        if resp.is_err() {
+            return Err(YahooError::ConnectionFailed);
+        }
+        let resp = resp.unwrap();
+        match resp.status() {
+            StatusCode::OK => resp.json().await.map_err(|_| YahooError::InvalidJson),
+            status => Err(YahooError::FetchFailed(format!("Status Code: {}", status))),
+        }
     }
 }
 
@@ -215,7 +214,6 @@ mod tests {
         let _ = response.last_quote().unwrap();
     }
 
-    
     #[test]
     fn test_mutual_fund_range() {
         let provider = YahooConnector::new();
@@ -225,5 +223,4 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
     }
-
 }

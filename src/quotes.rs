@@ -82,7 +82,7 @@ impl YResponse {
         Ok(vec![])
     }
     /// This method retrieves information about the dividends that have
-    /// been recorded during the considered time period. 
+    /// been recorded during the considered time period.
     ///
     /// Note: Date is the ex-dividend date)
     pub fn dividends(&self) -> Result<Vec<Dividend>, YahooError> {
@@ -223,13 +223,13 @@ pub struct Split {
     /// This is the date (timestamp) when the split occured
     pub date: u64,
     /// Numerator of the split. For instance a 1:5 split means you get 5 share
-    /// wherever you had one before the split. (Here the numerator is 1 and 
-    /// denom is 5). A reverse split is considered as nothing but a regular 
+    /// wherever you had one before the split. (Here the numerator is 1 and
+    /// denom is 5). A reverse split is considered as nothing but a regular
     /// split with a numerator > denom.
     pub numerator: u64,
     /// Denominator of the split. For instance a 1:5 split means you get 5 share
-    /// wherever you had one before the split. (Here the numerator is 1 and 
-    /// denom is 5). A reverse split is considered as nothing but a regular 
+    /// wherever you had one before the split. (Here the numerator is 1 and
+    /// denom is 5). A reverse split is considered as nothing but a regular
     /// split with a numerator > denom.
     pub denominator: u64,
     /// A textual representation of the split.
