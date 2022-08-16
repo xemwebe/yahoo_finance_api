@@ -201,7 +201,6 @@ macro_rules! YTICKER_QUERY {
 }
 
 /// Container for connection parameters to yahoo! finance server
-#[derive(Default)]
 pub struct YahooConnector {
     #[cfg(not(feature = "blocking"))]
     client: Client,
@@ -243,7 +242,8 @@ impl YahooConnectorBuilder {
         Ok(YahooConnector {
             #[cfg(not(feature = "blocking"))]
             client: builder.build()?,
-            ..Default::default()
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
         })
     }
 
