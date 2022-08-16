@@ -37,6 +37,7 @@ impl YahooConnector {
         );
         YResponse::from_json(self.send_request(&url).await?)
     }
+    
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval(
         &self,

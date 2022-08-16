@@ -101,7 +101,7 @@ use tokio_test;
 fn main() {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
-    let response = provider.get_latest_quotes(\"AAPL\", \"1m\").unwrap();
+    let response = provider.get_latest_quotes(\"AAPL\", \"1d\").unwrap();
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
@@ -162,12 +162,13 @@ fn main() {
 "
 )]
 
-#[cfg(not(feature = "blocking"))]
-use std::{time::Duration};
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
+#[cfg(feature = "blocking")]
+use reqwest::blocking::{Client, ClientBuilder};
 use reqwest::StatusCode;
 
 mod quotes;
@@ -202,13 +203,11 @@ macro_rules! YTICKER_QUERY {
 
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
-    #[cfg(not(feature = "blocking"))]
     client: Client,
     url: &'static str,
     search_url: &'static str,
 }
 
-#[cfg(not(feature = "blocking"))]
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,
@@ -218,29 +217,24 @@ impl YahooConnector {
     /// Constructor for a new instance of the yahoo connector.
     pub fn new() -> YahooConnector {
         YahooConnector {
-            #[cfg(not(feature = "blocking"))]
             client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
         }
     }
 
-    #[cfg(not(feature = "blocking"))]
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: reqwest::Client::builder(),
+            inner: Client::builder(),
         }
     }
 }
 
-#[cfg(not(feature = "blocking"))]
 impl YahooConnectorBuilder {
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        #[cfg(not(feature = "blocking"))]
-        let builder = reqwest::Client::builder();
+        let builder =Client::builder();
 
         Ok(YahooConnector {
-            #[cfg(not(feature = "blocking"))]
             client: builder.build()?,
             url: YCHART_URL,
             search_url: YSEARCH_URL,

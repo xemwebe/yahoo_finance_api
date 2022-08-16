@@ -16,7 +16,7 @@ fn get_quote() -> Result<f64, yahoo::YahooError> {
 fn get_quote() -> Result<f64, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
-    let response = provider.get_latest_quotes("AAPL", "1m").unwrap();
+    let response = provider.get_latest_quotes("AAPL", "1d").unwrap();
     // extract just the latest valid quote summery
     let quote = response.last_quote()?;
     Ok(quote.close)
