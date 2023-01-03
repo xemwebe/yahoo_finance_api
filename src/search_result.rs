@@ -1,3 +1,5 @@
+use select::document::Document;
+use select::predicate::{Attr, Class, Name, Predicate};
 use serde::Deserialize;
 
 use super::YahooError;
@@ -106,6 +108,62 @@ impl YSearchResult {
             count: search_result_opt.count,
             quotes: remove_opt(&search_result_opt.quotes),
             news: search_result_opt.news.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct YOptionResult {
+    pub name: String,
+    pub strike: f64,
+    pub last_trade_date: String,
+    pub last_price: f64,
+    pub bid: f64,
+    pub ask: f64,
+    pub change: f64,
+    pub change_pct: f64,
+    pub volume: i32,
+    pub open_interest: i32,
+    pub impl_volatility: f64,
+}
+
+#[derive(Debug)]
+pub struct YOptionResults {
+    pub options: Vec<YOptionResult>,
+}
+
+impl YOptionResults {
+    pub fn scrape(http_res: &str) -> Self {
+        let document = Document::from(http_res);
+
+        if let Some(table) = document.find(Class("list-options")).next() {
+            let rows = table.find(Name("tr"));
+            let options = rows
+                .skip(1)
+                .map(|row| {
+                    let columns = row.find(Name("td"));
+                    let cols: Vec<String> = columns.take(11).map(|s| s.text().trim().to_owned() ).collect();
+                    cols
+                })
+                .map(|sv| YOptionResult {
+                    name: sv[0].clone(),
+                    strike: sv[2].parse::<f64>().unwrap_or(0.0),
+                    last_trade_date: sv[1].clone(),
+                    last_price: sv[2].parse::<f64>().unwrap_or(0.0),
+                    bid: sv[2].parse::<f64>().unwrap_or(0.0),
+                    ask: sv[2].parse::<f64>().unwrap_or(0.0),
+                    change: sv[2].parse::<f64>().unwrap_or(0.0),
+                    change_pct: sv[2].parse::<f64>().unwrap_or(0.0),
+                    volume: sv[2].parse::<i32>().unwrap_or(0),
+                    open_interest: sv[2].parse::<i32>().unwrap_or(0),
+                    impl_volatility: sv[2].parse::<f64>().unwrap_or(0.0),
+                })
+                .collect();
+            Self { options }
+        } else {
+            Self {
+                options: Vec::new(),
+            }
         }
     }
 }

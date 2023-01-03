@@ -69,6 +69,13 @@ impl YahooConnector {
         Ok(YSearchResult::from_opt(&result))
     }
 
+    /// Get list for options for a given name
+    pub async fn search_options(&self, name: &str) -> Result<YOptionResults, YahooError> {
+        let url = format!("https://finance.yahoo.com/quote/{name}/options?p={name}");
+        let resp = self.client.get(url).send().await?.text().await?;
+        Ok(YOptionResults::scrape(&resp))
+    }
+
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         let resp = self.client.get(url).send().await?;
@@ -184,6 +191,14 @@ mod tests {
         }
         assert!(apple_found)
     }
+
+    #[test]
+    fn search_options() {
+        let provider = YahooConnector::new();
+        let resp = tokio_test::block_on(provider.search_options("AAPL")).unwrap();
+
+        assert!(resp.options.len() > 3);
+     }
 
     #[test]
     fn test_mutual_fund_history() {

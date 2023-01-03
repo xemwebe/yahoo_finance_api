@@ -178,7 +178,7 @@ pub use quotes::{
     AdjClose, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
     YMetaData, YQuoteBlock, YResponse,
 };
-pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt};
+pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt, YOptionResult, YOptionResults};
 pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
