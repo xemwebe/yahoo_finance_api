@@ -45,8 +45,8 @@ impl YahooConnector {
             YCHART_PERIOD_QUERY!(),
             url = self.url,
             symbol = ticker,
-            start = start.timestamp(),
-            end = end.timestamp(),
+            start = start.unix_timestamp(),
+            end = end.unix_timestamp(),
             interval = interval
         );
         YResponse::from_json(self.send_request(&url)?)
@@ -85,7 +85,7 @@ impl YahooConnector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use time::macros::datetime;
 
     #[test]
     fn test_get_single_quote() {
@@ -100,8 +100,8 @@ mod tests {
     #[test]
     fn test_strange_api_responses() {
         let provider = YahooConnector::new();
-        let start = Utc.ymd(2019, 7, 3).and_hms_milli(0, 0, 0, 0);
-        let end = Utc.ymd(2020, 7, 4).and_hms_milli(23, 59, 59, 999);
+        let start = datetime!(2019-07-03 0:00:00.00 UTC);
+        let end = datetime!(2020-07-04 23:59:59.99 UTC);
         let resp = provider.get_quote_history("IBM", start, end).unwrap();
 
         assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
@@ -126,8 +126,10 @@ mod tests {
     #[test]
     fn test_get_quote_history() {
         let provider = YahooConnector::new();
-        let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
-        let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+
+        let start = datetime!(2020-01-01 0:00:00.00 UTC);
+        let end = datetime!(2020-01-31 23:59:59.99 UTC);
+
         let resp = provider.get_quote_history("AAPL", start, end);
         if resp.is_ok() {
             let resp = resp.unwrap();
@@ -150,8 +152,10 @@ mod tests {
     #[test]
     fn test_get() {
         let provider = YahooConnector::new();
-        let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
-        let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+
+        let start = datetime!(2019-01-01 0:00:00.00 UTC);
+        let end = datetime!(2020-01-31 23:59:59.99 UTC);
+
         let response = provider
             .get_quote_history_interval("AAPL", start, end, "1mo")
             .unwrap();
@@ -188,8 +192,10 @@ mod tests {
     #[test]
     fn test_mutual_fund_history() {
         let provider = YahooConnector::new();
-        let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
-        let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+
+        let start = datetime!(2020-01-01 0:00:00.00 UTC);
+        let end = datetime!(2020-01-31 23:59:59.99 UTC);
+
         let resp = provider.get_quote_history("VTSAX", start, end);
         if resp.is_ok() {
             let resp = resp.unwrap();
