@@ -2,11 +2,7 @@ use super::*;
 
 impl YahooConnector {
     /// Retrieve the quotes of the last day for the given ticker
-    pub fn get_latest_quotes(
-        &self, 
-        ticker: &str, 
-        interval: &str,
-    ) -> Result<YResponse, YahooError> {
+    pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         self.get_quote_range(ticker, interval, "1mo")
     }
 
@@ -144,8 +140,7 @@ mod tests {
     #[test]
     fn test_get_quote_range() {
         let provider = YahooConnector::new();
-        let response =
-            provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
@@ -157,9 +152,9 @@ mod tests {
         let provider = YahooConnector::new();
         let start = Utc.ymd(2019, 1, 1).and_hms_milli(0, 0, 0, 0);
         let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
-        let response =
-            provider.get_quote_history_interval("AAPL", start, end, "1mo")
-                .unwrap();
+        let response = provider
+            .get_quote_history_interval("AAPL", start, end, "1mo")
+            .unwrap();
         assert_eq!(&response.chart.result[0].timestamp.len(), &13);
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
@@ -169,8 +164,7 @@ mod tests {
     #[test]
     fn test_large_volume() {
         let provider = YahooConnector::new();
-        let response =
-            provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
+        let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
         let quotes = response.quotes().unwrap();
         assert!(quotes.len() > 0usize);
     }
@@ -220,11 +214,9 @@ mod tests {
     #[test]
     fn test_mutual_fund_range() {
         let provider = YahooConnector::new();
-        let response =
-            provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
+        let response = provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
     }
-
 }
