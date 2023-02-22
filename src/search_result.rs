@@ -1,5 +1,5 @@
 use select::document::Document;
-use select::predicate::{Attr, Class, Name, Predicate};
+use select::predicate::{Class, Name};
 use serde::Deserialize;
 
 use super::YahooError;
