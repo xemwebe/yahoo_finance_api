@@ -27,7 +27,7 @@ fn main() {
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
-    let time: DateTime<Utc> =
+    let time: OffsetDateTime =
         DateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
     println!(\"At {} quote price of Apple was {}\", time.to_rfc3339(), quote.close);
 }
@@ -105,7 +105,7 @@ fn main() {
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
-    let time: DateTime<Utc> =
+    let time: OffsetDateTime =
         DateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
     println!(\"At {} quote price of Apple was {}\", time.to_rfc3339(), quote.close);
 }
@@ -163,13 +163,13 @@ fn main() {
 )]
 
 use std::time::Duration;
+use time::OffsetDateTime;
 
-use chrono::{DateTime, Utc};
-#[cfg(not(feature = "blocking"))]
-use reqwest::{Client, ClientBuilder};
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
 use reqwest::StatusCode;
+#[cfg(not(feature = "blocking"))]
+use reqwest::{Client, ClientBuilder};
 
 mod quotes;
 mod search_result;
@@ -178,7 +178,10 @@ pub use quotes::{
     AdjClose, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
     YMetaData, YQuoteBlock, YResponse,
 };
-pub use search_result::{YNewsItem, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt, YOptionResult, YOptionResults};
+pub use search_result::{
+    YNewsItem, YOptionResult, YOptionResults, YQuoteItem, YQuoteItemOpt, YSearchResult,
+    YSearchResultOpt,
+};
 pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -232,7 +235,7 @@ impl YahooConnector {
 
 impl YahooConnectorBuilder {
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        let builder =Client::builder();
+        let builder = Client::builder();
 
         Ok(YahooConnector {
             client: builder.build()?,

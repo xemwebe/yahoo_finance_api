@@ -14,8 +14,8 @@ impl YahooConnector {
     pub fn get_quote_history(
         &self,
         ticker: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
+        start: OffsetDateTime,
+        end: OffsetDateTime,
     ) -> Result<YResponse, YahooError> {
         self.get_quote_history_interval(ticker, start, end, "1d")
     }
@@ -41,8 +41,8 @@ impl YahooConnector {
     pub fn get_quote_history_interval(
         &self,
         ticker: &str,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
+        start: OffsetDateTime,
+        end: OffsetDateTime,
         interval: &str,
     ) -> Result<YResponse, YahooError> {
         let url = format!(
