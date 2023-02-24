@@ -1,3 +1,6 @@
+## Release 1.4.0
+Migration from chrono to time
+
 ## Release 1.3.0
 `unwrap()` removed
 Switch to using `thiserror` crate for error propagation
