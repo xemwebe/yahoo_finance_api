@@ -1,5 +1,5 @@
 use select::document::Document;
-use select::predicate::{Attr, Class, Name, Predicate};
+use select::predicate::{Class, Name};
 use serde::Deserialize;
 
 use super::YahooError;
@@ -142,7 +142,10 @@ impl YOptionResults {
                 .skip(1)
                 .map(|row| {
                     let columns = row.find(Name("td"));
-                    let cols: Vec<String> = columns.take(11).map(|s| s.text().trim().to_owned() ).collect();
+                    let cols: Vec<String> = columns
+                        .take(11)
+                        .map(|s| s.text().trim().to_owned())
+                        .collect();
                     cols
                 })
                 .map(|sv| YOptionResult {

@@ -9,7 +9,10 @@ fn search_apple_options() {
 
     println!("All options found on stock 'AAPL':");
     for item in resp.options {
-        println!("name: {}, strike: {}, last trade date: {}", item.name, item.strike, item.last_trade_date);
+        println!(
+            "name: {}, strike: {}, last trade date: {}",
+            item.name, item.strike, item.last_trade_date
+        );
     }
 }
 
@@ -20,7 +23,10 @@ fn search_apple_options() {
 
     println!("All options found on stock 'AAPL':");
     for item in resp.options {
-        println!("name: {}, strike: {}, last trade date: {}", item.name, item.strike, item.last_trade_date);
+        println!(
+            "name: {}, strike: {}, last trade date: {}",
+            item.name, item.strike, item.last_trade_date
+        );
     }
 }
 
