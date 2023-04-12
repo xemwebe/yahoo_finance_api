@@ -13,7 +13,7 @@ fn get_summary() -> Result<yahoo::YQuoteResponse, yahoo::YahooError> {
 fn get_summary() -> Result<yahoo::YQuoteResponse, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
-    provider.get_summary(&["AAPL", "IBM"]);
+    provider.get_summary(&["AAPL", "IBM"])
 }
 
 fn main() {
