@@ -1,3 +1,7 @@
+## Release 1.5.0
+New method add `get_summary` to extract a summary of various data on a list of given quotes.
+There is a new example `quote_summary` demonstrating the output.
+
 ## Release 1.4.0
 Migration from chrono to time
 
