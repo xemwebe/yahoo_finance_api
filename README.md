@@ -8,92 +8,88 @@ Therefore, the functions need to be called from within another ```async``` funct
 
 Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version" = "1.0", features = ["blocking"]}`. 
 
-Get the latest available quote (without the blocking feature enabled):
+# Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
 use std::time::{Duration, UNIX_EPOCH};
-use chrono::prelude::*;
+use time::OffsetDateTime;
 use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new();
     // get the latest quotes in 1 minute intervals
-    let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1m")).unwrap();
+    let response = tokio_test::block_on(provider.get_latest_quotes(\"AAPL\", \"1d\")).unwrap();
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
-    let time: DateTime<Utc> =
-        DateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
-    println!("At {} quote price of Apple was {}", time.to_rfc3339(), quote.close);
+    let time: OffsetDateTime =
+        OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+    println!(\"At {} quote price of Apple was {}\", time, quote.close);
 }
 ```
+# Get summary request
+Another method to lookup the latest quote price along with some economic data is through the `get_summary` request:
+```rust
+use tokio_test;
+use yahoo_finance_api as yahoo;
 
-Get history of quotes for given time period:
+fn main() {
+    let provider = yahoo::YahooConnector::new();
+    let quote_summary = tokio_test::block_on(provider.get_summary(&[\"AAPL\", \"IBM\"]));
+    println!(\"Quote summary of Apple and IBM {:#?}\", quote_summary);
+}
+```
+# Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;
 use std::time::{Duration, UNIX_EPOCH};
-use chrono::{Utc,TimeZone};
+use time::{macros::datetime, OffsetDateTime};
 use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new();
-    let start = Utc.ymd(2020, 1, 1).and_hms_milli(0, 0, 0, 0);
-    let end = Utc.ymd(2020, 1, 31).and_hms_milli(23, 59, 59, 999);
+    let start = datetime!(2020-1-1 0:00:00.00 UTC);
+    let end = datetime!(2020-1-31 23:59:59.99 UTC);
     // returns historic quotes with daily interval
-    let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end)).unwrap();
+    let resp = tokio_test::block_on(provider.get_quote_history(\"AAPL\", start, end)).unwrap();
     let quotes = resp.quotes().unwrap();
-    println!("Apple's quotes in January: {:?}", quotes);
+    println!(\"Apple's quotes in January: {:?}\", quotes);
 }
+```
+# Get the history of quotes for time range
+Another method to retrieve a range of quotes is by requesting the quotes for a given period and 
+lookup frequency. Here is an example retrieving the daily quotes for the last month:
+```rust
+use yahoo_finance_api as yahoo;
+use std::time::{Duration, UNIX_EPOCH};
+use tokio_test;
 
+fn main() {
+    let provider = yahoo::YahooConnector::new();
+    let response = tokio_test::block_on(provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\")).unwrap();
+    let quotes = response.quotes().unwrap();
+    println!(\"Apple's quotes of the last month: {:?}\", quotes);
+}
 ```
 
-Search for a ticker given a search string (e.g. company name):
+# Search for a ticker given a search string (e.g. company name):
 ```rust
 use yahoo_finance_api as yahoo;
 use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new();
-    let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
+    let resp = tokio_test::block_on(provider.search_ticker(\"Apple\")).unwrap();
 
     let mut apple_found = false;
-    println!("All tickers found while searching for 'Apple':");
+    println!(\"All tickers found while searching for 'Apple':\");
     for item in resp.quotes 
     {
-        println!("{}", item.symbol)
+        println!(\"{}\", item.symbol)
     }
 }
-
 ```
-Some fields like `longname` are only optional and will be replaced by default values if missing (e.g. empty string). If you do not like this behavior, use `search_ticker_opt` instead which
-contains `Option<String>` fields, returning `None` if the field found missing in the response.
-
-Another method to retrieve a range of quotes is by
-requesting the quotes for a given period and lookup frequency. Here is an example retrieving the daily quotes for the last month:
-
-```rust
-use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
-use chrono::{Utc,TimeZone};
-use tokio_test;
-
-fn main() {
-    let provider = yahoo::YahooConnector::new();
-    let response = tokio_test::block_on(provider.get_quote_range("AAPL", "1d", "1mo")).unwrap();
-    let quotes = response.quotes().unwrap();
-    println!("Apple's quotes of the last month: {:?}", quotes);
-}
-```
-
-With the blocking feature enabled, the last example would just look like
-```rust
-use yahoo_finance_api as yahoo;
-
-fn main() {
-    let provider = yahoo::YahooConnector::new();
-    let response = provider.get_quote_range("AAPL", "1d", "1mo").unwrap();
-    let quotes = response.quotes().unwrap();
-    println!("Apple's quotes of the last month: {:?}", quotes);
-}
-```
-and the other examples would just change accordingly.
+Some fields like `longname` are only optional and will be replaced by default 
+values if missing (e.g. empty string). If you do not like this behavior, 
+use `search_ticker_opt` instead which contains `Option<String>` fields, 
+returning `None` if the field found missing in the response.
