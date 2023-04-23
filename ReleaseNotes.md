@@ -1,3 +1,6 @@
+## Release 1.6.1
+Documentation update
+
 ## Release 1.6.0
 The members `mumerator` and `denominator` of struct `Split` has been changed to from `u64` to `f64`. 
 Most often, these should be small integers, but at least in some cases, the API returns these 

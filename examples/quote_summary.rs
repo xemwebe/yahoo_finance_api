@@ -12,7 +12,7 @@ fn get_summary() -> Result<yahoo::YQuoteResponse, yahoo::YahooError> {
 #[cfg(feature = "blocking")]
 fn get_summary() -> Result<yahoo::YQuoteResponse, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
-    // get the latest quotes in 1 minute intervals
+    // get the quote summary for both stocks
     provider.get_summary(&["AAPL", "IBM"])
 }
 
