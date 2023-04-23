@@ -1,3 +1,9 @@
+## Release 1.6.0
+The members `mumerator` and `denominator` of struct `Split` has been changed to from `u64` to `f64`. 
+Most often, these should be small integers, but at least in some cases, the API returns these 
+values as float. Fractional numerator or denominater seem to be unlikely, but not impossible,
+therefore the struct was updated to accept float. Unfortunately, this is breaking change.
+
 ## Release 1.5.0
 New method add `get_summary` to extract a summary of various data on a list of given quotes.
 There is a new example `quote_summary` demonstrating the output.
