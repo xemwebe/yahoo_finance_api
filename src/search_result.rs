@@ -148,18 +148,29 @@ impl YOptionResults {
                         .collect();
                     cols
                 })
-                .map(|sv| YOptionResult {
-                    name: sv[0].clone(),
-                    strike: sv[2].parse::<f64>().unwrap_or(0.0),
-                    last_trade_date: sv[1].clone(),
-                    last_price: sv[2].parse::<f64>().unwrap_or(0.0),
-                    bid: sv[2].parse::<f64>().unwrap_or(0.0),
-                    ask: sv[2].parse::<f64>().unwrap_or(0.0),
-                    change: sv[2].parse::<f64>().unwrap_or(0.0),
-                    change_pct: sv[2].parse::<f64>().unwrap_or(0.0),
-                    volume: sv[2].parse::<i32>().unwrap_or(0),
-                    open_interest: sv[2].parse::<i32>().unwrap_or(0),
-                    impl_volatility: sv[2].parse::<f64>().unwrap_or(0.0),
+                .map(|sv| {
+                    println!("sv: {:?}", sv);
+                    YOptionResult {
+                        name: sv[0].clone(),
+                        last_trade_date: sv[1].clone(),
+                        strike: sv[2].replace(",", "").parse::<f64>().unwrap_or(0.0),
+                        last_price: sv[3].replace(",", "").parse::<f64>().unwrap_or(0.0),
+                        bid: sv[4].replace(",", "").parse::<f64>().unwrap_or(0.0),
+                        ask: sv[5].replace(",", "").parse::<f64>().unwrap_or(0.0),
+                        change: sv[6].replace(",", "").parse::<f64>().unwrap_or(0.0),
+                        change_pct: sv[7]
+                            .replace(",", "")
+                            .trim_end_matches("%")
+                            .parse::<f64>()
+                            .unwrap_or(0.0),
+                        volume: sv[8].replace(",", "").parse::<i32>().unwrap_or(0),
+                        open_interest: sv[9].replace(",", "").parse::<i32>().unwrap_or(0),
+                        impl_volatility: sv[10]
+                            .replace(",", "")
+                            .trim_end_matches("%")
+                            .parse::<f64>()
+                            .unwrap_or(0.0),
+                    }
                 })
                 .collect();
             Self { options }
