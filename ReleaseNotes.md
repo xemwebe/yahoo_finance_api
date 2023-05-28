@@ -1,3 +1,7 @@
+## Release 2.0.0
+Breaking change: Method `get_summary` has to be removed, since this is no longer part of the free
+API interface of yahoo! finance.
+
 ## Release 1.6.1
 Documentation update
 

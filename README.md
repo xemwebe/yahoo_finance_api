@@ -27,18 +27,6 @@ fn main() {
     println!(\"At {} quote price of Apple was {}\", time, quote.close);
 }
 ```
-# Get summary request
-Another method to lookup the latest quote price along with some economic data is through the `get_summary` request:
-```rust
-use tokio_test;
-use yahoo_finance_api as yahoo;
-
-fn main() {
-    let provider = yahoo::YahooConnector::new();
-    let quote_summary = tokio_test::block_on(provider.get_summary(&[\"AAPL\", \"IBM\"]));
-    println!(\"Quote summary of Apple and IBM {:#?}\", quote_summary);
-}
-```
 # Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;

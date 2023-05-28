@@ -76,12 +76,6 @@ impl YahooConnector {
         Ok(YOptionResults::scrape(&resp))
     }
 
-    /// Get quote summary for a list of given tickers
-    pub async fn get_summary<T: AsRef<str> + Display>(&self, ticker: &[T]) -> Result<YQuoteResponse, YahooError> {
-        let url = format!(YQUOTE_QUERY!(), url = self.quote_url, symbols=ticker_as_list(ticker));
-        YQuoteResponse::from_json(self.send_request(&url).await?)
-    }
-
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         let resp = self.client.get(url).send().await?;
@@ -248,13 +242,5 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-    }
-
-    #[test]
-    fn test_quote_summary() {
-        let provider = YahooConnector::new();
-        let response =
-            tokio_test::block_on(provider.get_summary(&["AAPL", "OKE"])).unwrap();
-        assert_eq!(response.result.len(), 2);
     }
 }

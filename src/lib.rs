@@ -32,18 +32,6 @@ fn main() {
     println!(\"At {} quote price of Apple was {}\", time, quote.close);
 }
 ```
-# Get summary request
-Another method to lookup the latest quote price along with some economic data is through the `get_summary` request:
-```rust
-use tokio_test;
-use yahoo_finance_api as yahoo;
-
-fn main() {
-    let provider = yahoo::YahooConnector::new();
-    let quote_summary = tokio_test::block_on(provider.get_summary(&[\"AAPL\", \"IBM\"]));
-    println!(\"Quote summary of Apple and IBM {:#?}\", quote_summary);
-}
-```
 # Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -184,7 +172,6 @@ fn main() {
 
 use std::{
     time::Duration,
-    fmt::Display
 };
 use time::OffsetDateTime;
 
@@ -211,7 +198,6 @@ pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
-const YQUOTE_URL: &str = "https://query1.finance.yahoo.com/v7/finance/quote";
 
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
@@ -229,18 +215,12 @@ macro_rules! YTICKER_QUERY {
         "{url}?q={name}"
     };
 }
-macro_rules! YQUOTE_QUERY {
-    () => {
-        "{url}?symbols={symbols}"
-    };
-}
 
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
     client: Client,
     url: &'static str,
     search_url: &'static str,
-    quote_url: &'static str,
 }
 
 #[derive(Default)]
@@ -255,7 +235,6 @@ impl YahooConnector {
             client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
-            quote_url: YQUOTE_URL,
         }
     }
 
@@ -274,7 +253,6 @@ impl YahooConnectorBuilder {
             client: builder.build()?,
             url: YCHART_URL,
             search_url: YSEARCH_URL,
-            quote_url: YQUOTE_URL,
         })
     }
 
@@ -283,17 +261,6 @@ impl YahooConnectorBuilder {
 
         self
     }
-}
-
-fn ticker_as_list<T: AsRef<str> + Display>(ticker: &[T]) -> String {
-    if ticker.is_empty() {
-        return String::new();
-    }
-    let mut ticker_list = format!("{}", ticker[0]);
-    for t in &ticker[1..] {
-        ticker_list = format!("{ticker_list},{t}")
-    }
-    ticker_list
 }
 
 #[cfg(not(feature = "blocking"))]
