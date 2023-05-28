@@ -149,7 +149,6 @@ impl YOptionResults {
                     cols
                 })
                 .map(|sv| {
-                    println!("sv: {:?}", sv);
                     YOptionResult {
                         name: sv[0].clone(),
                         last_trade_date: sv[1].clone(),
