@@ -170,6 +170,9 @@ use reqwest::StatusCode;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
 
+// re-export time crate
+pub use time;
+
 mod quotes;
 mod quote_summary;
 mod search_result;
@@ -231,6 +234,12 @@ impl YahooConnector {
         YahooConnectorBuilder {
             inner: Client::builder(),
         }
+    }
+}
+
+impl Default for YahooConnector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
