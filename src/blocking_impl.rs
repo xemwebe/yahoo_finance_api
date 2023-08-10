@@ -106,7 +106,10 @@ mod tests {
 
         assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
         assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
-        assert_eq!(&resp.chart.result[0].meta.first_trade_date, &-252322200);
+        assert_eq!(
+            &resp.chart.result[0].meta.first_trade_date,
+            &Some(-252322200)
+        );
 
         let _ = resp.last_quote().unwrap();
     }

@@ -114,7 +114,10 @@ mod tests {
 
         assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
         assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
-        assert_eq!(&resp.chart.result[0].meta.first_trade_date, &-252322200);
+        assert_eq!(
+            &resp.chart.result[0].meta.first_trade_date,
+            &Some(-252322200)
+        );
 
         let _ = resp.last_quote().unwrap();
     }
@@ -229,6 +232,17 @@ mod tests {
         let response = tokio_test::block_on(provider.get_latest_quotes("VTSAX", "1d")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let _ = response.last_quote().unwrap();
+    }
+
+    #[test]
+    fn test_mutual_fund_latest_with_null_first_trade_date() {
+        let provider = YahooConnector::new();
+        let response = tokio_test::block_on(provider.get_latest_quotes("SIWA.F", "1d")).unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "SIWA.F");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
