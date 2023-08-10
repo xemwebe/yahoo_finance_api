@@ -132,7 +132,8 @@ pub struct YMetaData {
     pub symbol: String,
     pub exchange_name: String,
     pub instrument_type: String,
-    pub first_trade_date: i32,
+    #[serde(default)]
+    pub first_trade_date: Option<i32>,
     pub regular_market_time: u32,
     pub gmtoffset: i32,
     pub timezone: String,
