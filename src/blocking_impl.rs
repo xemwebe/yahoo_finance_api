@@ -150,6 +150,14 @@ mod tests {
     }
 
     #[test]
+    fn test_get_metadata() {
+        let provider = YahooConnector::new();
+        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+        let metadata = response.metadata().unwrap();
+        assert_eq!(metadata.symbol, "HNL.DE");
+    }
+
+    #[test]
     fn test_get() {
         let provider = YahooConnector::new();
 

@@ -54,7 +54,7 @@ impl YResponse {
 
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
         self.check_consistency()?;
-        let stock = &self.chart.result[0];
+        let stock: &YQuoteBlock = &self.chart.result[0];
         let mut quotes = Vec::new();
         let n = stock.timestamp.len();
         for i in 0..n {
@@ -65,6 +65,12 @@ impl YResponse {
             }
         }
         Ok(quotes)
+    }
+
+    pub fn metadata(&self) -> Result<YMetaData, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        Ok( stock.meta.to_owned())
     }
 
     /// This method retrieves information about the splits that might have
@@ -125,7 +131,7 @@ pub struct YQuoteBlock {
     pub indicators: QuoteBlock,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct YMetaData {
     pub currency: String,
@@ -152,14 +158,14 @@ pub struct YMetaData {
     pub valid_ranges: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct TradingPeriod {
     pub pre: PeriodInfo,
     pub regular: PeriodInfo,
     pub post: PeriodInfo,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PeriodInfo {
     pub timezone: String,
     pub start: u32,
