@@ -227,4 +227,16 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
     }
+
+    #[test]
+    fn test_mutual_fund_capital_gains() {
+        let provider = YahooConnector::new();
+        let response = provider.get_quote_range("AMAGX", "1d", "5y").unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "AMAGX");
+        assert_eq!(&response.chart.result[0].meta.range, "5y");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let capital_gains = response.capital_gains().unwrap();
+        assert!(capital_gains.len() > 0usize);
+    }
 }

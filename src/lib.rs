@@ -178,7 +178,7 @@ mod quote_summary;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
+    AdjClose, Dividend, CapitalGain, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
     YMetaData, YQuoteBlock, YResponse,
 };
 pub use quote_summary::{YQuoteResponse, YQuoteSummary};
@@ -194,12 +194,12 @@ const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
     () => {
-        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split"
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains"
     };
 }
 macro_rules! YCHART_RANGE_QUERY {
     () => {
-        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split"
+        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
     };
 }
 macro_rules! YTICKER_QUERY {
