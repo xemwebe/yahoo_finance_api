@@ -97,6 +97,21 @@ impl YResponse {
         }
         Ok(vec![])
     }
+
+    /// This method retrieves information about the capital gains that might have
+    /// occured during the considered time period (available only for Mutual Funds)
+    pub fn capital_gains(&self) -> Result<Vec<CapitalGain>, YahooError> {
+        self.check_consistency()?;
+        let stock = &self.chart.result[0];
+        if let Some(events) = &stock.events {
+            if let Some(capital_gain) = &events.capital_gains {
+                let mut data = capital_gain.values().cloned().collect::<Vec<CapitalGain>>();
+                data.sort_unstable_by_key(|d| d.date);
+                return Ok(data);
+            }
+        }
+        Ok(vec![])
+    }
 }
 
 /// Struct for single quote
@@ -215,6 +230,8 @@ pub struct QuoteList {
 pub struct EventsBlock {
     pub splits: Option<HashMap<u64, Split>>,
     pub dividends: Option<HashMap<u64, Dividend>>,
+    #[serde(rename = "capitalGains")]
+    pub capital_gains: Option<HashMap<u64, CapitalGain>>,
 }
 
 /// This structure simply models a split that has occured.
@@ -243,5 +260,14 @@ pub struct Dividend {
     /// This is the price of the dividend
     pub amount: f64,
     /// This is the ex-dividend date
+    pub date: u64,
+}
+
+/// This structure simply models a capital gain which has been recorded.
+#[derive(Deserialize, Debug, Clone)]
+pub struct CapitalGain {
+    /// This is the amount of capital gain distributed by the fund
+    pub amount: f64,
+    /// This is the recorded date of the capital gain 
     pub date: u64,
 }
