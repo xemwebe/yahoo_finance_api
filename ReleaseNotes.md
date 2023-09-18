@@ -1,3 +1,9 @@
+## Release 2.1.0
++ enable to retreive asset metadata
++ enable to fetch capital gains available on Mutual Funds
++ fix: support quote where firstTradeDate equals null
++ fx rate example added
+
 ## Release 2.0.1
 re-export the time crate
 
