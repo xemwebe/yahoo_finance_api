@@ -81,3 +81,37 @@ Some fields like `longname` are only optional and will be replaced by default
 values if missing (e.g. empty string). If you do not like this behavior, 
 use `search_ticker_opt` instead which contains `Option<String>` fields, 
 returning `None` if the field found missing in the response.
+
+# Time period labels
+
+Time periods are given as strings, combined from the number of periods (except for "ytd" and "max"
+and a string label specifying a single period. The following period labels are supported:
+
+| label | description |
+|:-----:|:-----------:|
+|   m   |   minute    |
+|   h   |   hour      |
+|   d   |   day       |
+|   wk  |   week      |
+|   mo  |   month     |
+|   y   |   year      |
+|  ytd  |  year-to-date |
+|  max  |  maximum    |
+
+# Valid parameter combinations
+
+User @satvikpendem, here is a list of supported quote intervals for a given range
+
+| range | interval |
+|:-----:|:--------:|
+|  1d   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+|  1mo  | 2m, 3m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+|  3mo  | 1h, 1d, 1wk, 1mo, 3mo |
+|  6mo  | 1h, 1d, 1wk, 1mo, 3mo |
+|  1y   | 1h, 1d, 1wk, 1mo, 3mo |
+|  2y   | 1h, 1d, 1wk, 1mo, 3mo |
+|  5y   | 1d, 1wk, 1mo, 3mo |
+|  10y   | 1d, 1wk, 1mo, 3mo |
+|  ytd   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+|  max   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+
