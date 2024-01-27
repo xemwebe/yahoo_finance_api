@@ -12,8 +12,9 @@ impl YQuoteResponse {
     pub fn from_json(json: serde_json::Value) -> Result<YQuoteResponse, YahooError> {
         Ok(serde_json::from_value(
             json.get("quoteResponse")
-            .ok_or(YahooError::DataInconsistency)?
-            .to_owned())?)
+                .ok_or(YahooError::DataInconsistency)?
+                .to_owned(),
+        )?)
     }
 }
 

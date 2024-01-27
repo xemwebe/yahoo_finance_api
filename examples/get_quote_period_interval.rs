@@ -11,7 +11,7 @@ fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
 #[cfg(feature = "blocking")]
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
-    provider.get_quote_history_interval("AAPL", "1d", "1m", true)
+    provider.get_quote_period_interval("AAPL", "1d", "1m", true)
 }
 
 fn main() {

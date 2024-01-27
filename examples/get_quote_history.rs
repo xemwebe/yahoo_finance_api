@@ -6,7 +6,7 @@ use yahoo_finance_api as yahoo;
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     let start = time::OffsetDateTime::UNIX_EPOCH;
-    let end= time::OffsetDateTime::now_utc();
+    let end = time::OffsetDateTime::now_utc();
     tokio_test::block_on(provider.get_quote_history("VTI", start, end))
 }
 
@@ -14,7 +14,7 @@ fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new();
     let start = time::OffsetDateTime::UNIX_EPOCH;
-    let end= time::OffsetDateTime::now_utc();
+    let end = time::OffsetDateTime::now_utc();
     provider.get_quote_history("VTI", start, end)
 }
 

@@ -40,7 +40,6 @@ impl YahooConnector {
         start: OffsetDateTime,
         end: OffsetDateTime,
         interval: &str,
-        prepost: bool,
     ) -> Result<YResponse, YahooError> {
         let url = format!(
             YCHART_PERIOD_QUERY!(),
@@ -49,7 +48,25 @@ impl YahooConnector {
             start = start.unix_timestamp(),
             end = end.unix_timestamp(),
             interval = interval,
-            prepost = prepost
+        );
+        YResponse::from_json(self.send_request(&url)?)
+    }
+
+    /// Retrieve the quote history for the given ticker for a given period and ticker interval and optionally before and after regular trading hours
+    pub fn get_quote_period_interval(
+        &self,
+        ticker: &str,
+        period: &str,
+        interval: &str,
+        prepost: bool,
+    ) -> Result<YResponse, YahooError> {
+        let url = format!(
+            YCHART_PERIOD_INTERVAL_QUERY!(),
+            url = self.url,
+            symbol = ticker,
+            period = period,
+            interval = interval,
+            prepost = prepost,
         );
         YResponse::from_json(self.send_request(&url)?)
     }
