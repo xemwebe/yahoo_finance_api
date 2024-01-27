@@ -178,7 +178,7 @@ mod quote_summary;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, Dividend, CapitalGain, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriod, YChart,
+    AdjClose, Dividend, CapitalGain, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriods, YChart,
     YMetaData, YQuoteBlock, YResponse,
 };
 pub use quote_summary::{YQuoteResponse, YQuoteSummary};
@@ -200,6 +200,11 @@ macro_rules! YCHART_PERIOD_QUERY {
 macro_rules! YCHART_RANGE_QUERY {
     () => {
         "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+    };
+}
+macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
+    () => {
+        "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
     };
 }
 macro_rules! YTICKER_QUERY {

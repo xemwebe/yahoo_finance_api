@@ -1,6 +1,11 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt
+};
 
-use serde::Deserialize;
+use serde::{Deserialize,
+    de::{self, Deserializer, Visitor, SeqAccess, MapAccess}
+};
 
 use super::YahooError;
 
@@ -166,22 +171,103 @@ pub struct YMetaData {
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
-    pub current_trading_period: TradingPeriod,
+    pub current_trading_period: CurrentTradingPeriod,
     #[serde(default)]
-    pub trading_periods: Option<Vec<Vec<PeriodInfo>>>,
+    pub trading_periods: TradingPeriods,
     pub data_granularity: String,
     pub range: String,
     pub valid_ranges: Vec<String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct TradingPeriods {
+  pub pre: Option<Vec<Vec<PeriodInfo>>>,  
+  pub regular: Option<Vec<Vec<PeriodInfo>>>,  
+  pub post: Option<Vec<Vec<PeriodInfo>>>,  
+}
+
+impl<'de> Deserialize<'de> for TradingPeriods
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field { Regular, Pre, Post }
+
+        struct TradingPeriodsVisitor;
+
+        impl<'de> Visitor<'de> for TradingPeriodsVisitor {
+            type Value = TradingPeriods;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct (or array) TradingPeriods")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<TradingPeriods, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let regular: Vec<PeriodInfo> = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                Ok(TradingPeriods{
+                    pre: None,
+                    regular: Some(vec![regular]),
+                    post: None
+                })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<TradingPeriods, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut pre = None;
+                let mut post = None;
+                let mut regular = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Pre => {
+                            if pre.is_some() {
+                                return Err(de::Error::duplicate_field("pre"));
+                            }
+                            pre = Some(map.next_value()?);
+                        },
+                        Field::Post => {
+                            if post.is_some() {
+                                return Err(de::Error::duplicate_field("post"));
+                            }
+                            post = Some(map.next_value()?);
+                        },
+                        Field::Regular => {
+                            if regular.is_some() {
+                                return Err(de::Error::duplicate_field("regular"));
+                            }
+                            regular = Some(map.next_value()?);
+                        },
+                        
+                    }
+                }
+                Ok(TradingPeriods{
+                    pre,
+                    post,
+                    regular,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(TradingPeriodsVisitor)
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
-pub struct TradingPeriod {
+pub struct CurrentTradingPeriod {
     pub pre: PeriodInfo,
     pub regular: PeriodInfo,
     pub post: PeriodInfo,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PeriodInfo {
     pub timezone: String,
     pub start: u32,
@@ -278,3 +364,148 @@ pub struct CapitalGain {
     /// This is the recorded date of the capital gain 
     pub date: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_deserialize_period_info() {
+        let period_info_json = r#"
+        {
+            "timezone": "EST",
+            "start": 1705501800,
+            "end": 1705525200,
+            "gmtoffset": -18000
+        }
+        "#;
+        let period_info_expected = PeriodInfo{
+            timezone: "EST".to_string(),
+            start: 1705501800,
+            end: 1705525200,
+            gmtoffset: -18000,
+        };
+        let period_info_deserialized: PeriodInfo = serde_json::from_str(period_info_json).unwrap();
+        assert_eq!(&period_info_deserialized, &period_info_expected);
+    }
+    
+    #[test]
+    fn test_deserialize_trading_periods_simple() {
+        let trading_periods_json = r#"
+        [
+            [
+                {
+                    "timezone": "EST",
+                    "start": 1705501800,
+                    "end": 1705525200,
+                    "gmtoffset": -18000
+                }
+            
+            ]
+        ]
+        "#;
+        let trading_periods_expected = TradingPeriods{
+            pre: None,
+            regular: Some(vec![vec![PeriodInfo{
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
+                gmtoffset: -18000,
+            }]]),
+            post: None,           
+        };
+        let trading_periods_deserialized: TradingPeriods = serde_json::from_str(trading_periods_json).unwrap();
+        assert_eq!(&trading_periods_expected, &trading_periods_deserialized);
+    }
+
+    #[test]
+    fn test_deserialize_trading_periods_complex_regular_only() {
+        let trading_periods_json = r#"
+        {
+            "regular": [
+              [
+                {
+                  "timezone": "EST",
+                  "start": 1705501800,
+                  "end": 1705525200,
+                  "gmtoffset": -18000
+                }
+              ]
+            ]
+        }
+       "#;
+        let trading_periods_expected = TradingPeriods{
+            pre: None,
+            regular: Some(vec![vec![PeriodInfo{
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
+                gmtoffset: -18000,
+            }]]),
+            post: None
+        };
+        let trading_periods_deserialized: TradingPeriods = serde_json::from_str(trading_periods_json).unwrap();
+        assert_eq!(&trading_periods_expected, &trading_periods_deserialized);
+    }
+
+    #[test]
+    fn test_deserialize_trading_periods_complex() {
+        let trading_periods_json = r#"
+        {
+            "pre": [
+              [
+                {
+                  "timezone": "EST",
+                  "start": 1705482000,
+                  "end": 1705501800,
+                  "gmtoffset": -18000
+                }
+              ]
+            ],
+            "post": [
+              [
+                {
+                  "timezone": "EST",
+                  "start": 1705525200,
+                  "end": 1705539600,
+                  "gmtoffset": -18000
+                }
+              ]
+            ],
+            "regular": [
+              [
+                {
+                  "timezone": "EST",
+                  "start": 1705501800,
+                  "end": 1705525200,
+                  "gmtoffset": -18000
+                }
+              ]
+            ]
+        }
+       "#;
+        let trading_periods_expected = TradingPeriods{
+            pre: Some(vec![vec![PeriodInfo{
+                timezone: "EST".to_string(),
+                start: 1705482000,
+                end: 1705501800,
+                gmtoffset: -18000,
+            }]]),
+            regular: Some(vec![vec![PeriodInfo{
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
+                gmtoffset: -18000,
+            }]]),
+            post: Some(vec![vec![PeriodInfo{
+                timezone: "EST".to_string(),
+                start: 1705525200,
+                end: 1705539600,
+                gmtoffset: -18000,
+            }]]),
+        };
+        let trading_periods_deserialized: TradingPeriods = serde_json::from_str(trading_periods_json).unwrap();
+        assert_eq!(&trading_periods_expected, &trading_periods_deserialized);
+    }
+}
+

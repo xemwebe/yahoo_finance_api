@@ -40,6 +40,7 @@ impl YahooConnector {
         start: OffsetDateTime,
         end: OffsetDateTime,
         interval: &str,
+        prepost: bool,
     ) -> Result<YResponse, YahooError> {
         let url = format!(
             YCHART_PERIOD_QUERY!(),
@@ -47,7 +48,8 @@ impl YahooConnector {
             symbol = ticker,
             start = start.unix_timestamp(),
             end = end.unix_timestamp(),
-            interval = interval
+            interval = interval,
+            prepost = prepost
         );
         YResponse::from_json(self.send_request(&url)?)
     }
