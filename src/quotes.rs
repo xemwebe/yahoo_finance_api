@@ -164,7 +164,6 @@ pub struct YMetaData {
     pub exchange_timezone_name: String,
     pub regular_market_price: f64,
     pub chart_previous_close: f64,
-    #[serde(default)]
     pub previous_close: Option<f64>,
     #[serde(default)]
     pub scale: Option<i32>,
