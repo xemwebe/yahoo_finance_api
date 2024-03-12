@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use serde::{
     de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
-    Deserialize,
+    Deserialize, Serialize,
 };
 
 use super::YahooError;
@@ -124,7 +124,7 @@ impl YResponse {
 }
 
 /// Struct for single quote
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Quote {
     pub timestamp: u64,
     pub open: f64,
@@ -396,7 +396,7 @@ mod tests {
                     "end": 1705525200,
                     "gmtoffset": -18000
                 }
-            
+
             ]
         ]
         "#;
