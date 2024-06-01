@@ -301,8 +301,6 @@ impl YahooConnectorBuilder {
         })
     }
 
-    
-
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.inner = self.inner.timeout(timeout);
 
