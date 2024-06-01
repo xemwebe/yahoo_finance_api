@@ -233,6 +233,19 @@ impl YahooConnector {
         }
     }
 
+    pub fn new_w_proxy(url: &str) -> Result<Self, YahooError> {
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all(url)?)
+            .build()?;
+        
+        Ok(YahooConnector {
+            client,
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        })
+
+    }
+
     pub fn new_w_client(client: Client) -> Self {
         YahooConnector {
             client,
