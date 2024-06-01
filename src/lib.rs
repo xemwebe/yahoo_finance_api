@@ -233,6 +233,14 @@ impl YahooConnector {
         }
     }
 
+    pub fn new_w_client(client: Client) -> Self {
+        YahooConnector {
+            client,
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        }
+    }
+
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
             inner: Client::builder(),
@@ -256,6 +264,8 @@ impl YahooConnectorBuilder {
             search_url: YSEARCH_URL,
         })
     }
+
+    
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.inner = self.inner.timeout(timeout);
