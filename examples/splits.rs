@@ -35,7 +35,8 @@ async fn main() {
 
 #[cfg(feature = "blocking")]
 fn main() {
-    let conn = yahoo::YahooConnector::new();
+    let conn = yahoo::YahooConnector::new().unwrap();
+
     let ticker = "TSLA";
     let start = datetime!(2020-08-28 00:00:00.00 UTC);
     let end = datetime!(2020-09-02 00:00:00.00 UTC);

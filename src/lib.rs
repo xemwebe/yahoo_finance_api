@@ -21,7 +21,7 @@ use time::OffsetDateTime;
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = tokio_test::block_on(provider.get_latest_quotes(\"AAPL\", \"1d\")).unwrap();
     // extract just the latest valid quote summery
@@ -40,7 +40,7 @@ use time::{macros::datetime, OffsetDateTime};
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let start = datetime!(2020-1-1 0:00:00.00 UTC);
     let end = datetime!(2020-1-31 23:59:59.99 UTC);
     // returns historic quotes with daily interval
@@ -58,7 +58,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let response = tokio_test::block_on(provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\")).unwrap();
     let quotes = response.quotes().unwrap();
     println!(\"Apple's quotes of the last month: {:?}\", quotes);
@@ -71,7 +71,7 @@ use yahoo_finance_api as yahoo;
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let resp = tokio_test::block_on(provider.search_ticker(\"Apple\")).unwrap();
 
     let mut apple_found = false;
@@ -99,7 +99,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use time::OffsetDateTime;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = provider.get_latest_quotes(\"AAPL\", \"1d\").unwrap();
     // extract just the latest valid quote summery
@@ -117,7 +117,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use time::{macros::datetime, OffsetDateTime};
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let start = datetime!(2020-1-1 0:00:00.00 UTC);
     let end = datetime!(2020-1-31 23:59:59.99 UTC);
     // returns historic quotes with daily interval
@@ -134,7 +134,7 @@ lookup frequency. Here is an example retrieving the daily quotes for the last mo
 use yahoo_finance_api as yahoo;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let response = provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\").unwrap();
     let quotes = response.quotes().unwrap();
     println!(\"Apple's quotes of the last month: {:?}\", quotes);
@@ -145,7 +145,7 @@ fn main() {
 use yahoo_finance_api as yahoo;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let resp = provider.search_ticker(\"Apple\").unwrap();
 
     let mut apple_found = false;
@@ -225,12 +225,8 @@ pub struct YahooConnectorBuilder {
 
 impl YahooConnector {
     /// Constructor for a new instance of the yahoo connector.
-    pub fn new() -> YahooConnector {
-        YahooConnector {
-            client: Client::default(),
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        }
+    pub fn new() -> Result<YahooConnector, YahooError> {
+        Self::builder().build()
     }
 
     pub fn builder() -> YahooConnectorBuilder {
@@ -242,16 +238,22 @@ impl YahooConnector {
 
 impl Default for YahooConnector {
     fn default() -> Self {
-        Self::new()
+        YahooConnector {
+            client: Client::default(),
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        }
     }
 }
 
 impl YahooConnectorBuilder {
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        let builder = Client::builder();
+        let client = Client::builder()
+            .user_agent( "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+            .build()?;
 
         Ok(YahooConnector {
-            client: builder.build()?,
+            client,
             url: YCHART_URL,
             search_url: YSEARCH_URL,
         })

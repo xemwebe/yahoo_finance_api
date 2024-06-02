@@ -4,13 +4,13 @@ use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     tokio_test::block_on(provider.get_quote_period_interval("AAPL", "1d", "1m", true))
 }
 
 #[cfg(feature = "blocking")]
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     provider.get_quote_period_interval("AAPL", "1d", "1m", true)
 }
 

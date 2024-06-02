@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_get_single_quote() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_latest_quotes("HNL.DE", "1d").unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_strange_api_responses() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let start = datetime!(2019-07-03 0:00:00.00 UTC);
         let end = datetime!(2020-07-04 23:59:59.99 UTC);
         let resp = provider.get_quote_history("IBM", start, end).unwrap();
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "DeserializeFailed")]
     fn test_api_responses_missing_fields() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_get_quote_history() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
 
         let start = datetime!(2020-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_get_quote_range() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_get_metadata() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
         let metadata = response.metadata().unwrap();
         assert_eq!(metadata.symbol, "HNL.DE");
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
 
         let start = datetime!(2019-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_large_volume() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
         let quotes = response.quotes().unwrap();
         assert!(quotes.len() > 0usize);
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_search_ticker() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let resp = provider.search_ticker("Apple").unwrap();
 
         assert_eq!(resp.count, 15);
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_mutual_fund_history() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
 
         let start = datetime!(2020-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_mutual_fund_latest() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_latest_quotes("VTSAX", "1d").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_mutual_fund_range() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
         assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
         assert_eq!(&response.chart.result[0].meta.range, "1mo");
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_mutual_fund_capital_gains() {
-        let provider = YahooConnector::new();
+        let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("AMAGX", "1d", "5y").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "AMAGX");
@@ -265,5 +265,13 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
         assert!(capital_gains.len() > 0usize);
+    }
+
+    #[test]
+    fn search_options() {
+        let provider = YahooConnector::new().unwrap();
+        let resp = provider.search_options("AAPL");
+
+        assert!(resp.is_ok());
     }
 }

@@ -7,7 +7,7 @@ use yahoo_finance_api as yahoo;
 #[cfg(not(feature = "blocking"))]
 #[tokio::main]
 async fn main() {
-    let conn = yahoo::YahooConnector::new();
+    let conn = yahoo::YahooConnector::new().unwrap();
     let ticker = "OKE";
     let start = datetime!(2020-07-25 00:00:00.00 UTC);
     let end = datetime!(2020-11-01 00:00:00.00 UTC);
@@ -30,7 +30,7 @@ async fn main() {
 
 #[cfg(feature = "blocking")]
 fn main() {
-    let conn = yahoo::YahooConnector::new();
+    let conn = yahoo::YahooConnector::new().unwrap();
     let ticker = "OKE";
     let start = datetime!(2020-07-25 00:00:00.00 UTC);
     let end = datetime!(2020-11-01 00:00:00.00 UTC);

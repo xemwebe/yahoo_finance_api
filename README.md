@@ -16,7 +16,7 @@ use time::OffsetDateTime;
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = tokio_test::block_on(provider.get_latest_quotes(\"AAPL\", \"1d\")).unwrap();
     // extract just the latest valid quote summery
@@ -35,7 +35,7 @@ use time::{macros::datetime, OffsetDateTime};
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let start = datetime!(2020-1-1 0:00:00.00 UTC);
     let end = datetime!(2020-1-31 23:59:59.99 UTC);
     // returns historic quotes with daily interval
@@ -53,7 +53,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let response = tokio_test::block_on(provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\")).unwrap();
     let quotes = response.quotes().unwrap();
     println!(\"Apple's quotes of the last month: {:?}\", quotes);
@@ -66,7 +66,7 @@ use yahoo_finance_api as yahoo;
 use tokio_test;
 
 fn main() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let resp = tokio_test::block_on(provider.search_ticker(\"Apple\")).unwrap();
 
     let mut apple_found = false;

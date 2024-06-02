@@ -4,7 +4,7 @@ use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
 fn search_apple_options() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let resp = tokio_test::block_on(provider.search_options("AAPL")).unwrap();
 
     println!("All options found on stock 'AAPL':");
@@ -18,7 +18,7 @@ fn search_apple_options() {
 
 #[cfg(feature = "blocking")]
 fn search_apple_options() {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let resp = provider.search_options("AAPL").unwrap();
 
     println!("All options found on stock 'AAPL':");

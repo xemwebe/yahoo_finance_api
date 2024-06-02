@@ -4,7 +4,7 @@ use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
 fn get_quote() -> Result<f64, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1d")).unwrap();
     // extract just the latest valid quote summery
@@ -14,7 +14,7 @@ fn get_quote() -> Result<f64, yahoo::YahooError> {
 
 #[cfg(feature = "blocking")]
 fn get_quote() -> Result<f64, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = provider.get_latest_quotes("AAPL", "1d").unwrap();
     // extract just the latest valid quote summery

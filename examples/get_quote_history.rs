@@ -4,7 +4,7 @@ use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
     tokio_test::block_on(provider.get_quote_history("VTI", start, end))
@@ -12,7 +12,7 @@ fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
 
 #[cfg(feature = "blocking")]
 fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new();
+    let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
     provider.get_quote_history("VTI", start, end)
