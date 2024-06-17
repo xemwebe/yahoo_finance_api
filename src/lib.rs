@@ -248,9 +248,11 @@ impl Default for YahooConnector {
 
 impl YahooConnectorBuilder {
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder()
-            .user_agent( "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-            .build()?;
+        self.build_with_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+    }
+
+    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
+        let client = Client::builder().user_agent(user_agent).build()?;
 
         Ok(YahooConnector {
             client,

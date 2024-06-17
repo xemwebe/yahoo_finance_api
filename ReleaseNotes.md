@@ -1,3 +1,8 @@
+## Release 2.2.0
++ specify user agent instead of default
++ add new method `build_with_agent(self, user_agent: &str)` to allow use of custom agent
++ constructor may fail now, returning a Result
+
 ## Release 2.1.0
 + enable to retreive asset metadata
 + enable to fetch capital gains available on Mutual Funds
