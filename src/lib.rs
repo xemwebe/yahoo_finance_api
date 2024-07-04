@@ -226,6 +226,50 @@ impl YahooConnector {
     pub fn new() -> Result<YahooConnector, YahooError> {
         Self::builder().build()
     }
+    
+    /// Constructs a new instance of the object.
+    ///
+    /// # Parameters
+    /// - `url`: Proxy url
+    /// - `auth`: Opt(username, password)
+    /// # Example
+    /// ```
+    /// use yahoo_finance_api as yf;
+    /// let instance = yf::YahooConnector::new_w_proxy(
+    ///   "https://secure.example", 
+    ///   Some(("user123", "password123"))
+    /// );
+    /// ```
+    pub fn new_w_proxy(url: &str, auth: Option<(&str, &str)>) -> Result<Self, YahooError> {
+        let client = if auth.is_some() {
+            let auth = auth.expect("Conditioned");
+            let proxy = reqwest::Proxy::all(url)?
+                .basic_auth(auth.0, auth.1);
+
+            reqwest::Client::builder()
+                .proxy(proxy)
+                .build()?
+        } else {
+            reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all(url)?)
+            .build()?
+        };
+            
+        Ok(YahooConnector {
+            client,
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        })
+
+    }
+
+    pub fn new_w_client(client: Client) -> Self {
+        YahooConnector {
+            client,
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        }
+    }
 
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
