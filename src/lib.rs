@@ -171,11 +171,9 @@ use reqwest::{Client, ClientBuilder};
 // re-export time crate
 pub use time;
 
-mod quote_summary;
 mod quotes;
 mod search_result;
 mod yahoo_error;
-pub use quote_summary::{YQuoteResponse, YQuoteSummary};
 pub use quotes::{
     AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split,
     TradingPeriods, YChart, YMetaData, YQuoteBlock, YResponse,

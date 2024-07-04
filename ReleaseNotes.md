@@ -1,3 +1,6 @@
+## Release 2.2.1
++ remove superfluous file `quote_summary.rs` (See note to Release 2.0.0)
+
 ## Release 2.2.0
 + specify user agent instead of default
 + add new method `build_with_agent(self, user_agent: &str)` to allow use of custom agent
