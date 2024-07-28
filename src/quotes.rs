@@ -7,6 +7,20 @@ use serde::{
 
 use super::YahooError;
 
+#[cfg(not(feature = "decimal"))]
+mod decimal {
+    pub type Decimal = f64;
+    pub const ZERO: Decimal = 0.0;
+}
+
+#[cfg(feature = "decimal")]
+mod decimal {
+    pub type Decimal = rust_decimal::Decimal;
+    pub const ZERO: Decimal = Decimal::ZERO;
+}
+
+pub use decimal::*;
+
 #[derive(Deserialize, Debug)]
 pub struct YResponse {
     pub chart: YChart,
@@ -127,12 +141,12 @@ impl YResponse {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Quote {
     pub timestamp: u64,
-    pub open: f64,
-    pub high: f64,
-    pub low: f64,
+    pub open: Decimal,
+    pub high: Decimal,
+    pub low: Decimal,
     pub volume: u64,
-    pub close: f64,
-    pub adjclose: f64,
+    pub close: Decimal,
+    pub adjclose: Decimal,
 }
 
 #[derive(Deserialize, Debug)]
@@ -162,9 +176,9 @@ pub struct YMetaData {
     pub gmtoffset: i32,
     pub timezone: String,
     pub exchange_timezone_name: String,
-    pub regular_market_price: f64,
-    pub chart_previous_close: f64,
-    pub previous_close: Option<f64>,
+    pub regular_market_price: Decimal,
+    pub chart_previous_close: Decimal,
+    pub previous_close: Option<Decimal>,
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
@@ -291,28 +305,28 @@ impl QuoteBlock {
         }
         Ok(Quote {
             timestamp,
-            open: quote.open[i].unwrap_or(0.0),
-            high: quote.high[i].unwrap_or(0.0),
-            low: quote.low[i].unwrap_or(0.0),
+            open: quote.open[i].unwrap_or(ZERO),
+            high: quote.high[i].unwrap_or(ZERO),
+            low: quote.low[i].unwrap_or(ZERO),
             volume: quote.volume[i].unwrap_or(0),
             close: quote.close[i].unwrap(),
-            adjclose: adjclose.unwrap_or(0.0),
+            adjclose: adjclose.unwrap_or(ZERO),
         })
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct AdjClose {
-    adjclose: Vec<Option<f64>>,
+    adjclose: Vec<Option<Decimal>>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct QuoteList {
     pub volume: Vec<Option<u64>>,
-    pub high: Vec<Option<f64>>,
-    pub close: Vec<Option<f64>>,
-    pub low: Vec<Option<f64>>,
-    pub open: Vec<Option<f64>>,
+    pub high: Vec<Option<Decimal>>,
+    pub close: Vec<Option<Decimal>>,
+    pub low: Vec<Option<Decimal>>,
+    pub open: Vec<Option<Decimal>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -332,12 +346,12 @@ pub struct Split {
     /// wherever you had one before the split. (Here the numerator is 1 and
     /// denom is 5). A reverse split is considered as nothing but a regular
     /// split with a numerator > denom.
-    pub numerator: f64,
+    pub numerator: Decimal,
     /// Denominator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
     /// denom is 5). A reverse split is considered as nothing but a regular
     /// split with a numerator > denom.
-    pub denominator: f64,
+    pub denominator: Decimal,
     /// A textual representation of the split.
     #[serde(rename = "splitRatio")]
     pub split_ratio: String,
@@ -347,7 +361,7 @@ pub struct Split {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Dividend {
     /// This is the price of the dividend
-    pub amount: f64,
+    pub amount: Decimal,
     /// This is the ex-dividend date
     pub date: u64,
 }
