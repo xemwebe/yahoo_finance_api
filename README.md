@@ -18,13 +18,13 @@ use tokio_test;
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
-    let response = tokio_test::block_on(provider.get_latest_quotes(\"AAPL\", \"1d\")).unwrap();
+    let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1d")).unwrap();
     // extract just the latest valid quote summery
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
         OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
-    println!(\"At {} quote price of Apple was {}\", time, quote.close);
+    println!("At {} quote price of Apple was {}", time, quote.close);
 }
 ```
 # Get history of quotes for given time period:
@@ -39,9 +39,9 @@ fn main() {
     let start = datetime!(2020-1-1 0:00:00.00 UTC);
     let end = datetime!(2020-1-31 23:59:59.99 UTC);
     // returns historic quotes with daily interval
-    let resp = tokio_test::block_on(provider.get_quote_history(\"AAPL\", start, end)).unwrap();
+    let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end)).unwrap();
     let quotes = resp.quotes().unwrap();
-    println!(\"Apple's quotes in January: {:?}\", quotes);
+    println!("Apple's quotes in January: {:?}", quotes);
 }
 ```
 # Get the history of quotes for time range
@@ -54,9 +54,9 @@ use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
-    let response = tokio_test::block_on(provider.get_quote_range(\"AAPL\", \"1d\", \"1mo\")).unwrap();
+    let response = tokio_test::block_on(provider.get_quote_range("AAPL", "1d", "1mo")).unwrap();
     let quotes = response.quotes().unwrap();
-    println!(\"Apple's quotes of the last month: {:?}\", quotes);
+    println!("Apple's quotes of the last month: {:?}", quotes);
 }
 ```
 
@@ -67,13 +67,13 @@ use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
-    let resp = tokio_test::block_on(provider.search_ticker(\"Apple\")).unwrap();
+    let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
 
     let mut apple_found = false;
-    println!(\"All tickers found while searching for 'Apple':\");
+    println!("All tickers found while searching for 'Apple':");
     for item in resp.quotes 
     {
-        println!(\"{}\", item.symbol)
+        println!("{}", item.symbol)
     }
 }
 ```
