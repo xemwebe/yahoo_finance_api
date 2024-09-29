@@ -111,20 +111,20 @@ impl YSearchResult {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct YOptionChain {
     pub option_chain: YOptionChainResult,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct YOptionChainResult {
     pub result: Vec<YOptionChainData>,
     pub error: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct YOptionChainData {
     pub underlying_symbol: String,
     pub expiration_dates: Vec<u64>,
@@ -135,7 +135,7 @@ pub(crate) struct YOptionChainData {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct YQuote {
     pub language: String,
     pub region: String,
@@ -154,6 +154,7 @@ pub(crate) struct YQuote {
     pub two_hundred_day_average_change: f64,
     pub two_hundred_day_average_change_percent: f64,
     pub market_cap: u64,
+    #[serde(rename = "forwardPE")]
     pub forward_pe: f64,
     pub price_to_book: f64,
     pub source_interval: u64,
@@ -173,6 +174,7 @@ pub(crate) struct YQuote {
     pub earnings_timestamp_start: u64,
     pub earnings_timestamp_end: u64,
     pub trailing_annual_dividend_rate: f64,
+    #[serde(rename = "trailingPE")]
     pub trailing_pe: f64,
     pub trailing_annual_dividend_yield: f64,
     pub eps_trailing_twelve_months: f64,
@@ -212,7 +214,7 @@ pub(crate) struct YQuote {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct YOptionDetails {
     pub expiration_date: u64,
     pub has_mini_options: bool,
@@ -221,7 +223,7 @@ pub(crate) struct YOptionDetails {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct YOptionContract {
     pub contract_symbol: String,
     pub strike: f64,
@@ -229,7 +231,8 @@ pub struct YOptionContract {
     pub last_price: f64,
     pub change: f64,
     pub percent_change: f64,
-    pub volume: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volume: Option<u64>,
     pub open_interest: u64,
     pub bid: f64,
     pub ask: f64,
