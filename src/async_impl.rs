@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn search_options() {
+    fn ptions() {
         let provider = YahooConnector::new().unwrap();
         let resp = tokio_test::block_on(provider.search_options("AAPL"));
 
