@@ -1,5 +1,3 @@
-use select::document::Document;
-use select::predicate::{Class, Name};
 use serde::Deserialize;
 
 use super::YahooError;
@@ -112,69 +110,138 @@ impl YSearchResult {
     }
 }
 
-#[derive(Debug)]
-pub struct YOptionResult {
-    pub name: String,
-    pub strike: f64,
-    pub last_trade_date: String,
-    pub last_price: f64,
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct YOptionChain {
+    pub option_chain: YOptionChainResult,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct YOptionChainResult {
+    pub result: Vec<YOptionChainData>,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct YOptionChainData {
+    pub underlying_symbol: String,
+    pub expiration_dates: Vec<u64>,
+    pub strikes: Vec<f64>,
+    pub has_mini_options: bool,
+    pub quote: YQuote,
+    pub options: Vec<YOptionDetails>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct YQuote {
+    pub language: String,
+    pub region: String,
+    pub quote_type: String,
+    pub triggerable: bool,
+    pub quote_source_name: String,
+    pub currency: String,
+    pub eps_current_year: f64,
+    pub price_eps_current_year: f64,
+    pub shares_outstanding: u64,
+    pub book_value: f64,
+    pub fifty_day_average: f64,
+    pub fifty_day_average_change: f64,
+    pub fifty_day_average_change_percent: f64,
+    pub two_hundred_day_average: f64,
+    pub two_hundred_day_average_change: f64,
+    pub two_hundred_day_average_change_percent: f64,
+    pub market_cap: u64,
+    pub forward_pe: f64,
+    pub price_to_book: f64,
+    pub source_interval: u64,
+    pub exchange_timezone_name: String,
+    pub exchange_timezone_short_name: String,
+    pub gmt_off_set_milliseconds: i64,
+    pub esg_populated: bool,
+    pub tradeable: bool,
+    pub market_state: String,
+    pub short_name: String,
+    pub fifty_two_week_high_change: f64,
+    pub fifty_two_week_high_change_percent: f64,
+    pub fifty_two_week_low: f64,
+    pub fifty_two_week_high: f64,
+    pub dividend_date: u64,
+    pub earnings_timestamp: u64,
+    pub earnings_timestamp_start: u64,
+    pub earnings_timestamp_end: u64,
+    pub trailing_annual_dividend_rate: f64,
+    pub trailing_pe: f64,
+    pub trailing_annual_dividend_yield: f64,
+    pub eps_trailing_twelve_months: f64,
+    pub eps_forward: f64,
+    pub price_hint: u64,
+    pub post_market_change_percent: f64,
+    pub post_market_time: u64,
+    pub post_market_price: f64,
+    pub post_market_change: f64,
+    pub regular_market_change_percent: f64,
+    pub regular_market_day_range: String,
+    pub regular_market_previous_close: f64,
     pub bid: f64,
     pub ask: f64,
+    pub bid_size: u64,
+    pub ask_size: u64,
+    pub message_board_id: String,
+    pub full_exchange_name: String,
+    pub long_name: String,
+    pub financial_currency: String,
+    pub average_daily_volume3_month: u64,
+    pub average_daily_volume10_day: u64,
+    pub fifty_two_week_low_change: f64,
+    pub fifty_two_week_low_change_percent: f64,
+    pub fifty_two_week_range: String,
+    pub market: String,
+    pub exchange_data_delayed_by: u64,
+    pub regular_market_price: f64,
+    pub regular_market_time: u64,
+    pub regular_market_change: f64,
+    pub regular_market_open: f64,
+    pub regular_market_day_high: f64,
+    pub regular_market_day_low: f64,
+    pub regular_market_volume: u64,
+    pub exchange: String,
+    pub symbol: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub(crate) struct YOptionDetails {
+    pub expiration_date: u64,
+    pub has_mini_options: bool,
+    pub calls: Vec<YOptionContract>,
+    pub puts: Vec<YOptionContract>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct YOptionContract {
+    pub contract_symbol: String,
+    pub strike: f64,
+    pub currency: String,
+    pub last_price: f64,
     pub change: f64,
-    pub change_pct: f64,
-    pub volume: i32,
-    pub open_interest: i32,
-    pub impl_volatility: f64,
+    pub percent_change: f64,
+    pub volume: u64,
+    pub open_interest: u64,
+    pub bid: f64,
+    pub ask: f64,
+    pub contract_size: String,
+    pub expiration: u64,
+    pub last_trade_date: u64,
+    pub implied_volatility: f64,
+    pub in_the_money: bool,
 }
 
 #[derive(Debug)]
 pub struct YOptionResults {
-    pub options: Vec<YOptionResult>,
-}
-
-impl YOptionResults {
-    pub fn scrape(http_res: &str) -> Self {
-        let document = Document::from(http_res);
-
-        if let Some(table) = document.find(Class("list-options")).next() {
-            let rows = table.find(Name("tr"));
-            let options = rows
-                .skip(1)
-                .map(|row| {
-                    let columns = row.find(Name("td"));
-                    let cols: Vec<String> = columns
-                        .take(11)
-                        .map(|s| s.text().trim().to_owned())
-                        .collect();
-                    cols
-                })
-                .map(|sv| YOptionResult {
-                    name: sv[0].clone(),
-                    last_trade_date: sv[1].clone(),
-                    strike: sv[2].replace(',', "").parse::<f64>().unwrap_or(0.0),
-                    last_price: sv[3].replace(',', "").parse::<f64>().unwrap_or(0.0),
-                    bid: sv[4].replace(',', "").parse::<f64>().unwrap_or(0.0),
-                    ask: sv[5].replace(',', "").parse::<f64>().unwrap_or(0.0),
-                    change: sv[6].replace(',', "").parse::<f64>().unwrap_or(0.0),
-                    change_pct: sv[7]
-                        .replace(',', "")
-                        .trim_end_matches('%')
-                        .parse::<f64>()
-                        .unwrap_or(0.0),
-                    volume: sv[8].replace(',', "").parse::<i32>().unwrap_or(0),
-                    open_interest: sv[9].replace(',', "").parse::<i32>().unwrap_or(0),
-                    impl_volatility: sv[10]
-                        .replace(',', "")
-                        .trim_end_matches('%')
-                        .parse::<f64>()
-                        .unwrap_or(0.0),
-                })
-                .collect();
-            Self { options }
-        } else {
-            Self {
-                options: Vec::new(),
-            }
-        }
-    }
+    pub calls: Vec<YOptionContract>,
+    pub puts: Vec<YOptionContract>,
 }

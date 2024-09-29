@@ -1,3 +1,5 @@
+use search_result::YOptionChain;
+
 use super::*;
 
 impl YahooConnector {
@@ -90,9 +92,22 @@ impl YahooConnector {
 
     /// Get list for options for a given name
     pub async fn search_options(&self, name: &str) -> Result<YOptionResults, YahooError> {
-        let url = format!("https://finance.yahoo.com/quote/{name}/options?p={name}");
-        let resp = self.client.get(url).send().await?.text().await?;
-        Ok(YOptionResults::scrape(&resp))
+        let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
+        let resp = self.client.get(url).send().await?;
+        let resp = resp.json::<YOptionChain>().await?;
+        let options = resp
+            .option_chain
+            .result
+            .first()
+            .unwrap()
+            .options
+            .first()
+            .unwrap();
+
+        Ok(YOptionResults {
+            calls: options.calls.clone(),
+            puts: options.puts.clone(),
+        })
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value

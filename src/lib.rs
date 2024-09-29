@@ -179,7 +179,7 @@ pub use quotes::{
     TradingPeriods, YChart, YMetaData, YQuoteBlock, YResponse,
 };
 pub use search_result::{
-    YNewsItem, YOptionResult, YOptionResults, YQuoteItem, YQuoteItemOpt, YSearchResult,
+    YNewsItem, YOptionContract, YOptionResults, YQuoteItem, YQuoteItemOpt, YSearchResult,
     YSearchResultOpt,
 };
 pub use yahoo_error::YahooError;

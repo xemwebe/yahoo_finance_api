@@ -8,10 +8,10 @@ fn search_apple_options() {
     let resp = tokio_test::block_on(provider.search_options("AAPL")).unwrap();
 
     println!("All options found on stock 'AAPL':");
-    for item in resp.options {
+    for item in resp.calls {
         println!(
             "name: {}, strike: {}, last trade date: {}",
-            item.name, item.strike, item.last_trade_date
+            item.contract_symbol, item.strike, item.last_trade_date
         );
     }
 }
@@ -22,7 +22,7 @@ fn search_apple_options() {
     let resp = provider.search_options("AAPL").unwrap();
 
     println!("All options found on stock 'AAPL':");
-    for item in resp.options {
+    for item in resp.calls {
         println!(
             "name: {}, strike: {}, last trade date: {}",
             item.name, item.strike, item.last_trade_date
