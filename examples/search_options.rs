@@ -25,7 +25,7 @@ fn search_apple_options() {
     for item in resp.calls {
         println!(
             "name: {}, strike: {}, last trade date: {}",
-            item.name, item.strike, item.last_trade_date
+            item.contract_symbol, item.strike, item.last_trade_date
         );
     }
 }
