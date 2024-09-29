@@ -1,3 +1,5 @@
+use search_result::YOptionChain;
+
 use super::*;
 
 impl YahooConnector {
@@ -86,8 +88,8 @@ impl YahooConnector {
     /// Get list for options for a given name
     pub fn search_options(&self, name: &str) -> Result<YOptionResults, YahooError> {
         let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
-        let resp = self.client.get(url).send().await?;
-        let resp = resp.json::<YOptionChain>().await?;
+        let resp = self.client.get(url).send()?;
+        let resp = resp.json::<YOptionChain>()?;
         let options = resp
             .option_chain
             .result
