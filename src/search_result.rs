@@ -225,20 +225,34 @@ pub struct YOptionDetails {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionContract {
-    pub contract_symbol: String,
-    pub strike: f64,
-    pub currency: String,
-    pub last_price: f64,
-    pub change: f64,
-    pub percent_change: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percent_change: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<u64>,
-    pub open_interest: u64,
-    pub bid: f64,
-    pub ask: f64,
-    pub contract_size: String,
-    pub expiration: u64,
-    pub last_trade_date: u64,
-    pub implied_volatility: f64,
-    pub in_the_money: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_interest: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bid: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ask: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiration: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_trade_date: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub implied_volatility: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_the_money: Option<bool>,
 }
