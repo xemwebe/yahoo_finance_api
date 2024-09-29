@@ -86,23 +86,12 @@ impl YahooConnector {
     }
 
     /// Get list for options for a given name
-    pub fn search_options(&self, name: &str) -> Result<YOptionResults, YahooError> {
+    pub fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
         let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
         let resp = self.client.get(url).send()?;
         let resp = resp.json::<YOptionChain>()?;
-        let options = resp
-            .option_chain
-            .result
-            .first()
-            .unwrap()
-            .options
-            .first()
-            .unwrap();
 
-        Ok(YOptionResults {
-            calls: options.calls.clone(),
-            puts: options.puts.clone(),
-        })
+        Ok(resp)
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value

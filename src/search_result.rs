@@ -112,20 +112,20 @@ impl YSearchResult {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct YOptionChain {
+pub struct YOptionChain {
     pub option_chain: YOptionChainResult,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct YOptionChainResult {
+pub struct YOptionChainResult {
     pub result: Vec<YOptionChainData>,
     pub error: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct YOptionChainData {
+pub struct YOptionChainData {
     pub underlying_symbol: String,
     pub expiration_dates: Vec<u64>,
     pub strikes: Vec<f64>,
@@ -136,7 +136,7 @@ pub(crate) struct YOptionChainData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct YQuote {
+pub struct YQuote {
     pub language: String,
     pub region: String,
     pub quote_type: String,
@@ -215,7 +215,7 @@ pub(crate) struct YQuote {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct YOptionDetails {
+pub struct YOptionDetails {
     pub expiration_date: u64,
     pub has_mini_options: bool,
     pub calls: Vec<YOptionContract>,
@@ -241,10 +241,4 @@ pub struct YOptionContract {
     pub last_trade_date: u64,
     pub implied_volatility: f64,
     pub in_the_money: bool,
-}
-
-#[derive(Debug)]
-pub struct YOptionResults {
-    pub calls: Vec<YOptionContract>,
-    pub puts: Vec<YOptionContract>,
 }
