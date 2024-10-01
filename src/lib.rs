@@ -50,7 +50,7 @@ fn main() {
 }
 ```
 # Get the history of quotes for time range
-Another method to retrieve a range of quotes is by requesting the quotes for a given period and 
+Another method to retrieve a range of quotes is by requesting the quotes for a given period and
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -76,15 +76,15 @@ fn main() {
 
     let mut apple_found = false;
     println!(\"All tickers found while searching for 'Apple':\");
-    for item in resp.quotes 
+    for item in resp.quotes
     {
         println!(\"{}\", item.symbol)
     }
 }
 ```
-Some fields like `longname` are only optional and will be replaced by default 
-values if missing (e.g. empty string). If you do not like this behavior, 
-use `search_ticker_opt` instead which contains `Option<String>` fields, 
+Some fields like `longname` are only optional and will be replaced by default
+values if missing (e.g. empty string). If you do not like this behavior,
+use `search_ticker_opt` instead which contains `Option<String>` fields,
 returning `None` if the field found missing in the response.
 "
 )]
@@ -128,7 +128,7 @@ fn main() {
 
 ```
 # Get the history of quotes for time range
-Another method to retrieve a range of quotes is by requesting the quotes for a given period and 
+Another method to retrieve a range of quotes is by requesting the quotes for a given period and
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -150,7 +150,7 @@ fn main() {
 
     let mut apple_found = false;
     println!(\"All tickers found while searching for 'Apple':\");
-    for item in resp.quotes 
+    for item in resp.quotes
     {
         println!(\"{}\", item.symbol)
     }
@@ -169,6 +169,7 @@ use reqwest::StatusCode;
 use reqwest::{Client, ClientBuilder};
 
 // re-export time crate
+pub use quotes::decimal::Decimal;
 pub use time;
 
 mod quotes;

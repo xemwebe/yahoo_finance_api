@@ -8,13 +8,13 @@ use serde::{
 use super::YahooError;
 
 #[cfg(not(feature = "decimal"))]
-mod decimal {
+pub mod decimal {
     pub type Decimal = f64;
     pub const ZERO: Decimal = 0.0;
 }
 
 #[cfg(feature = "decimal")]
-mod decimal {
+pub mod decimal {
     pub type Decimal = rust_decimal::Decimal;
     pub const ZERO: Decimal = Decimal::ZERO;
 }

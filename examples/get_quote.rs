@@ -1,9 +1,11 @@
 #[cfg(not(feature = "blocking"))]
 use tokio_test;
+
+use yahoo::Decimal;
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
-fn get_quote() -> Result<f64, yahoo::YahooError> {
+fn get_quote() -> Result<Decimal, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = tokio_test::block_on(provider.get_latest_quotes("AAPL", "1d")).unwrap();
@@ -13,7 +15,7 @@ fn get_quote() -> Result<f64, yahoo::YahooError> {
 }
 
 #[cfg(feature = "blocking")]
-fn get_quote() -> Result<f64, yahoo::YahooError> {
+fn get_quote() -> Result<Decimal, yahoo::YahooError> {
     let provider = yahoo::YahooConnector::new().unwrap();
     // get the latest quotes in 1 minute intervals
     let response = provider.get_latest_quotes("AAPL", "1d").unwrap();
