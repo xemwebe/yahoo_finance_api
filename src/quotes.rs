@@ -166,7 +166,7 @@ pub struct YQuoteBlock {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct YMetaData {
-    pub currency: String,
+    pub currency: Option<String>,
     pub symbol: String,
     pub exchange_name: String,
     pub instrument_type: String,
