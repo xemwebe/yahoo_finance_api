@@ -1,4 +1,5 @@
 ## Release 2.3.0-alpha
++ improved option fetching
 + currency `YMetaData` is now optional, since it is not always returned by the API
 + new feature `decimal` to use `rust_decimal` crate for representation of amounts
 + exmample `get_quote` asks user to input quote name
