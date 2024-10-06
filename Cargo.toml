@@ -6,6 +6,7 @@ authors = [
     "Claus Matzinger <claus.matzinger+kb@gmail.com>",
 ]
 edition = "2018"
+rust-version = "1.70"
 description = "A rust adapter for the yahoo! finance API to fetch histories of market data quotes."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/xemwebe/yahoo_finance_api"
