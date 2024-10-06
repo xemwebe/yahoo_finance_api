@@ -30,5 +30,5 @@ tokio-test = "0.4"
 tokio = { version = "1.7", features = ["macros", "rt-multi-thread"] }
 
 [features]
-blocking = ["reqwest/blocking"]
-decimal = ["rust_decimal"]
+blocking = []
+decimal = []
