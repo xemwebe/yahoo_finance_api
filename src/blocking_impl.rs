@@ -157,12 +157,11 @@ mod tests {
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
         let resp = provider.get_quote_history("AAPL", start, end);
-        if resp.is_ok() {
-            let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
-            let quotes = resp.quotes().unwrap();
-            assert_eq!(quotes.len(), 21);
-        }
+        assert!(resp.is_ok());
+        let resp = resp.unwrap();
+        assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+        let quotes = resp.quotes().unwrap();
+        assert_eq!(quotes.len(), 21);
     }
 
     #[test]
