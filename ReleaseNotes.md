@@ -1,3 +1,9 @@
+## Release 2.4.0
++ make post-market fields optional, since they are not always returned
++ add Cargo.lock to repository
++ change edition to 2021
++ disable feature rust_decimal (use feature `decimal` to enable use of `rust_decimal`)
+
 ## Release 2.3.0
 + refactoring option fetching, all fields are now optional
 + currency `YMetaData` is now optional, since it is not always returned by the API
