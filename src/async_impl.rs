@@ -1,3 +1,4 @@
+use crate::quotes::YQuoteSummary;
 use search_result::YOptionChain;
 
 use super::*;
@@ -97,6 +98,53 @@ impl YahooConnector {
         let resp = resp.json::<YOptionChain>().await?;
 
         Ok(resp)
+    }
+
+    // Get symbol metadata
+    pub async fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
+        let get_cookie_resp = reqwest::get(Y_GET_COOKIE_URL).await.unwrap();
+        let cookie = get_cookie_resp
+            .headers()
+            .get(Y_COOKIE_REQUEST_HEADER)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let jar_for_cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        jar_for_cookie.add_cookie_str(cookie, &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap());
+        let intermediate_client_for_cookie = Client::builder()
+            .user_agent(USER_AGENT)
+            .cookie_provider(jar_for_cookie)
+            .build()
+            .unwrap();
+
+        let crumb = intermediate_client_for_cookie
+            .get(reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap())
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+
+        let jar_for_info = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        let url_for_information = reqwest::Url::parse(
+            &(format!(YQUOTE_SUMMARY_QUERY!(), symbol = symbol, crumb = crumb)),
+        );
+        jar_for_info.add_cookie_str(cookie, &url_for_information.clone().unwrap());
+
+        let client_for_info = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .cookie_provider(jar_for_info)
+            .build()
+            .unwrap();
+        let resp = client_for_info
+            .get(url_for_information.unwrap())
+            .send()
+            .await
+            .unwrap();
+        let result = resp.json().await.unwrap();
+
+        Ok(result)
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value
@@ -300,5 +348,15 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
         assert!(capital_gains.len() > 0usize);
+    }
+
+    #[test]
+    fn test_get_ticker_info() {
+        let mut provider = YahooConnector::new().unwrap();
+        let result = tokio_test::block_on(provider.get_ticker_info("AAPL"));
+
+        assert!(result.is_ok());
+        assert!("Cupertino" == result.unwrap().quoteSummary.result[0].assetProfile.city);
+        // Testing it retrieved info, hard coded but shouldn't change soon
     }
 }
