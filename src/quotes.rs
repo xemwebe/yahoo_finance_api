@@ -375,6 +375,100 @@ pub struct CapitalGain {
     pub date: u64,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct YQuoteSummary {
+    pub quoteSummary: QuoteSummary,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QuoteSummary {
+    pub result: Vec<ResultData>,
+    pub error: Option<serde_json::Value>,
+}
+
+impl YQuoteSummary {
+    pub fn from_json(json: serde_json::Value) -> Result<YQuoteSummary, YahooError> {
+        Ok(serde_json::from_value(json)?)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ResultData {
+    pub assetProfile: AssetProfile,
+    pub summaryDetail: SummaryDetail,
+    pub defaultKeyStatistics: DefaultKeyStatistics,
+    pub quoteType: QuoteType,
+    pub financialData: FinancialData,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AssetProfile {
+    pub address1: String,
+    pub city: String,
+    pub state: String,
+    pub zip: String,
+    pub country: String,
+    pub phone: String,
+    pub website: String,
+    pub industry: String,
+    pub sector: String,
+    pub longBusinessSummary: String,
+    pub fullTimeEmployees: u32,
+    pub companyOfficers: Vec<CompanyOfficer>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CompanyOfficer {
+    pub name: String,
+    pub age: Option<u32>,
+    pub title: String,
+    pub yearBorn: Option<u32>,
+    pub fiscalYear: u32,
+    pub totalPay: Option<ValueWrapper>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ValueWrapper {
+    pub raw: Option<u64>,
+    pub fmt: Option<String>,
+    pub longFmt: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SummaryDetail {
+    pub previousClose: f64,
+    pub open: f64,
+    pub dayLow: f64,
+    pub dayHigh: f64,
+    pub regularMarketVolume: u64,
+    pub marketCap: u64,
+    pub currency: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DefaultKeyStatistics {
+    pub enterpriseValue: u64,
+    pub profitMargins: f64,
+    pub sharesOutstanding: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QuoteType {
+    pub exchange: String,
+    pub symbol: String,
+    pub longName: String,
+    pub timeZoneFullName: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FinancialData {
+    pub currentPrice: f64,
+    pub totalCash: u64,
+    pub ebitda: u64,
+    pub totalDebt: u64,
+    pub totalRevenue: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
