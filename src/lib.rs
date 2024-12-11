@@ -187,6 +187,12 @@ pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
+const Y_GET_COOKIE_URL: &str = "https://fc.yahoo.com";
+const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb";
+
+// special yahoo hardcoded keys and headers
+const Y_COOKIE_REQUEST_HEADER: &str = "set-cookie";
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
@@ -208,6 +214,11 @@ macro_rules! YTICKER_QUERY {
     () => {
         "{url}?q={name}"
     };
+}
+macro_rules! YQUOTE_SUMMARY_QUERY {
+    () => {
+        "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
+    }
 }
 
 /// Container for connection parameters to yahoo! finance server
@@ -247,7 +258,7 @@ impl Default for YahooConnector {
 
 impl YahooConnectorBuilder {
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        self.build_with_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        self.build_with_agent(USER_AGENT)
     }
 
     pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {

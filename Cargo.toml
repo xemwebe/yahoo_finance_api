@@ -19,6 +19,7 @@ include = ["src/**/*", "LICENSE-*", "README.md"]
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
+    "cookies"
 ] }
 rust_decimal = { version = "1.36", optional = true }
 serde_json = "1.0"
