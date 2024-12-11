@@ -101,7 +101,7 @@ impl YahooConnector {
     }
 
     // Get symbol metadata
-    pub async fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
+    pub async fn get_ticker_info(symbol: &str) -> Result<YQuoteSummary, YahooError> {
         let get_cookie_resp = reqwest::get(Y_GET_COOKIE_URL).await.unwrap();
         let cookie = get_cookie_resp
             .headers()
@@ -351,8 +351,7 @@ mod tests {
 
     #[test]
     fn test_get_ticker_info() {
-        let mut provider = YahooConnector::new().unwrap();
-        let result = tokio_test::block_on(provider.get_ticker_info("AAPL"));
+        let result = tokio_test::block_on(YahooConnector::get_ticker_info("AAPL"));
 
         assert!(result.is_ok());
         let quote_summary = result.unwrap().quote_summary;
