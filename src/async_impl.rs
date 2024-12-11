@@ -143,7 +143,6 @@ impl YahooConnector {
             .await
             .unwrap();
         let result = resp.json().await.unwrap();
-
         Ok(result)
     }
 
@@ -356,7 +355,7 @@ mod tests {
         let result = tokio_test::block_on(provider.get_ticker_info("AAPL"));
 
         assert!(result.is_ok());
-        assert!("Cupertino" == result.unwrap().quoteSummary.result[0].assetProfile.city);
-        // Testing it retrieved info, hard coded but shouldn't change soon
+        let quote_summary = result.unwrap().quote_summary;
+        assert!("Cupertino" == quote_summary.result[0].asset_profile.city); // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 }
