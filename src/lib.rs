@@ -187,7 +187,6 @@ pub use yahoo_error::YahooError;
 
 const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
-const YQUOTESUMMARY_URL: &str = "";
 const Y_GET_COOKIE_URL: &str = "https://fc.yahoo.com";
 const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb";
 
