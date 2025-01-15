@@ -11,8 +11,8 @@
 //! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
 #![cfg_attr(
-    not(feature = "blocking"),
-    doc = "
+	not(feature = "blocking"),
+	doc = "
 # Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -90,8 +90,8 @@ returning `None` if the field found missing in the response.
 )]
 //!
 #![cfg_attr(
-    feature = "blocking",
-    doc = "
+	feature = "blocking",
+	doc = "
 # Get the latest available quote (with blocking feature enabled):
 ```rust
 use yahoo_finance_api as yahoo;
@@ -176,12 +176,12 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split,
-    TradingPeriods, YChart, YMetaData, YQuoteBlock, YResponse,
+	AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split, TradingPeriods,
+	YChart, YMetaData, YQuoteBlock, YResponse,
 };
 pub use search_result::{
-    YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
-    YQuote, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt,
+	YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
+	YQuote, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt,
 };
 pub use yahoo_error::YahooError;
 
@@ -195,76 +195,70 @@ macro_rules! YCHART_PERIOD_QUERY {
     };
 }
 macro_rules! YCHART_RANGE_QUERY {
-    () => {
-        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
-    };
+	() => {
+		"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+	};
 }
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
-    () => {
-        "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
-    };
+	() => {
+		"{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}"
+	};
 }
 macro_rules! YTICKER_QUERY {
-    () => {
-        "{url}?q={name}"
-    };
+	() => {
+		"{url}?q={name}"
+	};
 }
 
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
-    client: Client,
-    url: &'static str,
-    search_url: &'static str,
+	client:     Client,
+	url:        &'static str,
+	search_url: &'static str,
 }
 
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
-    inner: ClientBuilder,
+	inner: ClientBuilder,
 }
 
 impl YahooConnector {
-    /// Constructor for a new instance of the yahoo connector.
-    pub fn new() -> Result<YahooConnector, YahooError> {
-        Self::builder().build()
-    }
+	/// Constructor for a new instance of the yahoo connector.
+	pub fn new() -> Result<YahooConnector, YahooError> {
+		Self::builder().build()
+	}
 
-    pub fn builder() -> YahooConnectorBuilder {
-        YahooConnectorBuilder {
-            inner: Client::builder(),
-        }
-    }
+	pub fn builder() -> YahooConnectorBuilder {
+		YahooConnectorBuilder { inner: Client::builder() }
+	}
 }
 
 impl Default for YahooConnector {
-    fn default() -> Self {
-        YahooConnector {
-            client: Client::default(),
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        }
-    }
+	fn default() -> Self {
+		YahooConnector {
+			client:     Client::default(),
+			url:        YCHART_URL,
+			search_url: YSEARCH_URL,
+		}
+	}
 }
 
 impl YahooConnectorBuilder {
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
-        self.build_with_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-    }
+	pub fn build(self) -> Result<YahooConnector, YahooError> {
+		self.build_with_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	}
 
-    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder().user_agent(user_agent).build()?;
+	pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
+		let client = Client::builder().user_agent(user_agent).build()?;
 
-        Ok(YahooConnector {
-            client,
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        })
-    }
+		Ok(YahooConnector { client, url: YCHART_URL, search_url: YSEARCH_URL })
+	}
 
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.inner = self.inner.timeout(timeout);
+	pub fn timeout(mut self, timeout: Duration) -> Self {
+		self.inner = self.inner.timeout(timeout);
 
-        self
-    }
+		self
+	}
 }
 
 #[cfg(not(feature = "blocking"))]
