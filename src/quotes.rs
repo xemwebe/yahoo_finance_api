@@ -1,9 +1,8 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
+use std::fmt;
 
-use serde::{
-    de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
-    Deserialize, Serialize,
-};
+use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Serialize};
 
 use super::YahooError;
 
@@ -104,6 +103,7 @@ impl YResponse {
         }
         Ok(vec![])
     }
+
     /// This method retrieves information about the dividends that have
     /// been recorded during the considered time period.
     ///
@@ -373,6 +373,127 @@ pub struct CapitalGain {
     pub amount: f64,
     /// This is the recorded date of the capital gain
     pub date: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YQuoteSummary {
+    #[serde(rename = "quoteSummary")]
+    pub quote_summary: ExtendedQuoteSummary,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ExtendedQuoteSummary {
+    pub result: Vec<YSummaryData>,
+    pub error: Option<serde_json::Value>,
+}
+
+impl YQuoteSummary {
+    pub fn from_json(json: serde_json::Value) -> Result<YQuoteSummary, YahooError> {
+        Ok(serde_json::from_value(json)?)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YSummaryData {
+    #[serde(rename = "assetProfile")]
+    pub asset_profile: AssetProfile,
+    #[serde(rename = "summaryDetail")]
+    pub summary_detail: SummaryDetail,
+    #[serde(rename = "defaultKeyStatistics")]
+    pub default_key_statistics: DefaultKeyStatistics,
+    #[serde(rename = "quoteType")]
+    pub quote_type: QuoteType,
+    #[serde(rename = "financialData")]
+    pub financial_data: FinancialData,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AssetProfile {
+    pub address1: String,
+    pub city: String,
+    pub state: String,
+    pub zip: String,
+    pub country: String,
+    pub phone: String,
+    pub website: String,
+    pub industry: String,
+    pub sector: String,
+    #[serde(rename = "longBusinessSummary")]
+    pub long_business_summary: String,
+    #[serde(rename = "fullTimeEmployees")]
+    pub full_time_employees: u32,
+    #[serde(rename = "companyOfficers")]
+    pub company_officers: Vec<CompanyOfficer>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CompanyOfficer {
+    pub name: String,
+    pub age: Option<u32>,
+    pub title: String,
+    #[serde(rename = "yearBorn")]
+    pub year_born: Option<u32>,
+    #[serde(rename = "fiscalYear")]
+    pub fiscal_year: u32,
+    #[serde(rename = "totalPay")]
+    pub total_pay: Option<ValueWrapper>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ValueWrapper {
+    pub raw: Option<u64>,
+    pub fmt: Option<String>,
+    #[serde(rename = "longFmt")]
+    pub long_fmt: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SummaryDetail {
+    #[serde(rename = "previousClose")]
+    pub previous_close: f64,
+    pub open: f64,
+    #[serde(rename = "dayLow")]
+    pub day_low: f64,
+    #[serde(rename = "dayHigh")]
+    pub day_high: f64,
+    #[serde(rename = "regularMarketVolume")]
+    pub regular_market_volume: u64,
+    #[serde(rename = "marketCap")]
+    pub market_cap: u64,
+    pub currency: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DefaultKeyStatistics {
+    #[serde(rename = "enterpriseValue")]
+    pub enterprise_value: u64,
+    #[serde(rename = "profitMargins")]
+    pub profit_margins: f64,
+    #[serde(rename = "sharesOutstanding")]
+    pub shares_outstanding: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QuoteType {
+    pub exchange: String,
+    pub symbol: String,
+    #[serde(rename = "longName")]
+    pub long_name: String,
+    #[serde(rename = "timeZoneFullName")]
+    pub timezone_full_name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FinancialData {
+    #[serde(rename = "currentPrice")]
+    pub current_price: f64,
+    #[serde(rename = "totalCash")]
+    pub total_cash: u64,
+    pub ebitda: u64,
+    #[serde(rename = "totalDebt")]
+    pub total_debt: u64,
+    #[serde(rename = "totalRevenue")]
+    pub total_revenue: u64,
 }
 
 #[cfg(test)]
