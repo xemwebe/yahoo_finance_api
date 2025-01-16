@@ -200,6 +200,11 @@ macro_rules! YCHART_PERIOD_QUERY {
         "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains"
     };
 }
+macro_rules! YCHART_PERIOD_QUERY_PRE_POST {
+    () => {
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains&includePrePost={prepost}"
+    };
+}
 macro_rules! YCHART_RANGE_QUERY {
     () => {
         "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
