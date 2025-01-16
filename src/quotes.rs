@@ -168,8 +168,11 @@ pub struct YQuoteBlock {
 pub struct YMetaData {
     pub currency: Option<String>,
     pub symbol: String,
-    pub exchange_name: String,
+    pub long_name: String,
+    pub short_name: String,
     pub instrument_type: String,
+    pub exchange_name: String,
+    pub full_exchange_name: String,
     #[serde(default)]
     pub first_trade_date: Option<i32>,
     pub regular_market_time: u32,
@@ -179,6 +182,12 @@ pub struct YMetaData {
     pub regular_market_price: Decimal,
     pub chart_previous_close: Decimal,
     pub previous_close: Option<Decimal>,
+    pub has_pre_post_market_data: bool,
+    pub fifty_two_week_high: Decimal,
+    pub fifty_two_week_low: Decimal,
+    pub regular_market_day_high: Decimal,
+    pub regular_market_day_low: Decimal,
+    pub regular_market_volume: Decimal,
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
