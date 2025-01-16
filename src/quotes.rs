@@ -141,60 +141,60 @@ impl YResponse {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Quote {
     pub timestamp: u64,
-    pub open:      Decimal,
-    pub high:      Decimal,
-    pub low:       Decimal,
-    pub volume:    u64,
-    pub close:     Decimal,
-    pub adjclose:  Decimal,
+    pub open: Decimal,
+    pub high: Decimal,
+    pub low: Decimal,
+    pub volume: u64,
+    pub close: Decimal,
+    pub adjclose: Decimal,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct YChart {
     pub result: Vec<YQuoteBlock>,
-    pub error:  Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct YQuoteBlock {
-    pub meta:       YMetaData,
-    pub timestamp:  Vec<u64>,
-    pub events:     Option<EventsBlock>,
+    pub meta: YMetaData,
+    pub timestamp: Vec<u64>,
+    pub events: Option<EventsBlock>,
     pub indicators: QuoteBlock,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct YMetaData {
-    pub currency:               Option<String>,
-    pub symbol:                 String,
-    pub exchange_name:          String,
-    pub instrument_type:        String,
+    pub currency: Option<String>,
+    pub symbol: String,
+    pub exchange_name: String,
+    pub instrument_type: String,
     #[serde(default)]
-    pub first_trade_date:       Option<i32>,
-    pub regular_market_time:    u32,
-    pub gmtoffset:              i32,
-    pub timezone:               String,
+    pub first_trade_date: Option<i32>,
+    pub regular_market_time: u32,
+    pub gmtoffset: i32,
+    pub timezone: String,
     pub exchange_timezone_name: String,
-    pub regular_market_price:   Decimal,
-    pub chart_previous_close:   Decimal,
-    pub previous_close:         Option<Decimal>,
+    pub regular_market_price: Decimal,
+    pub chart_previous_close: Decimal,
+    pub previous_close: Option<Decimal>,
     #[serde(default)]
-    pub scale:                  Option<i32>,
-    pub price_hint:             i32,
+    pub scale: Option<i32>,
+    pub price_hint: i32,
     pub current_trading_period: CurrentTradingPeriod,
     #[serde(default)]
-    pub trading_periods:        TradingPeriods,
-    pub data_granularity:       String,
-    pub range:                  String,
-    pub valid_ranges:           Vec<String>,
+    pub trading_periods: TradingPeriods,
+    pub data_granularity: String,
+    pub range: String,
+    pub valid_ranges: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TradingPeriods {
-    pub pre:     Option<Vec<Vec<PeriodInfo>>>,
+    pub pre: Option<Vec<Vec<PeriodInfo>>>,
     pub regular: Option<Vec<Vec<PeriodInfo>>>,
-    pub post:    Option<Vec<Vec<PeriodInfo>>>,
+    pub post: Option<Vec<Vec<PeriodInfo>>>,
 }
 
 impl<'de> Deserialize<'de> for TradingPeriods {
@@ -223,9 +223,14 @@ impl<'de> Deserialize<'de> for TradingPeriods {
             where
                 V: SeqAccess<'de>,
             {
-                let regular: Vec<PeriodInfo> =
-                    seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                Ok(TradingPeriods { pre: None, regular: Some(vec![regular]), post: None })
+                let regular: Vec<PeriodInfo> = seq
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                Ok(TradingPeriods {
+                    pre: None,
+                    regular: Some(vec![regular]),
+                    post: None,
+                })
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<TradingPeriods, V::Error>
@@ -242,19 +247,19 @@ impl<'de> Deserialize<'de> for TradingPeriods {
                                 return Err(de::Error::duplicate_field("pre"));
                             }
                             pre = Some(map.next_value()?);
-                        },
+                        }
                         Field::Post => {
                             if post.is_some() {
                                 return Err(de::Error::duplicate_field("post"));
                             }
                             post = Some(map.next_value()?);
-                        },
+                        }
                         Field::Regular => {
                             if regular.is_some() {
                                 return Err(de::Error::duplicate_field("regular"));
                             }
                             regular = Some(map.next_value()?);
-                        },
+                        }
                     }
                 }
                 Ok(TradingPeriods { pre, post, regular })
@@ -267,22 +272,22 @@ impl<'de> Deserialize<'de> for TradingPeriods {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CurrentTradingPeriod {
-    pub pre:     PeriodInfo,
+    pub pre: PeriodInfo,
     pub regular: PeriodInfo,
-    pub post:    PeriodInfo,
+    pub post: PeriodInfo,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PeriodInfo {
-    pub timezone:  String,
-    pub start:     u32,
-    pub end:       u32,
+    pub timezone: String,
+    pub start: u32,
+    pub end: u32,
     pub gmtoffset: i32,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct QuoteBlock {
-    quote:    Vec<QuoteList>,
+    quote: Vec<QuoteList>,
     #[serde(default)]
     adjclose: Option<Vec<AdjClose>>,
 }
@@ -318,16 +323,16 @@ pub struct AdjClose {
 #[derive(Deserialize, Debug)]
 pub struct QuoteList {
     pub volume: Vec<Option<u64>>,
-    pub high:   Vec<Option<Decimal>>,
-    pub close:  Vec<Option<Decimal>>,
-    pub low:    Vec<Option<Decimal>>,
-    pub open:   Vec<Option<Decimal>>,
+    pub high: Vec<Option<Decimal>>,
+    pub close: Vec<Option<Decimal>>,
+    pub low: Vec<Option<Decimal>>,
+    pub open: Vec<Option<Decimal>>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct EventsBlock {
-    pub splits:        Option<HashMap<u64, Split>>,
-    pub dividends:     Option<HashMap<u64, Dividend>>,
+    pub splits: Option<HashMap<u64, Split>>,
+    pub dividends: Option<HashMap<u64, Dividend>>,
     #[serde(rename = "capitalGains")]
     pub capital_gains: Option<HashMap<u64, CapitalGain>>,
 }
@@ -336,12 +341,12 @@ pub struct EventsBlock {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Split {
     /// This is the date (timestamp) when the split occured
-    pub date:        u64,
+    pub date: u64,
     /// Numerator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
     /// denom is 5). A reverse split is considered as nothing but a regular
     /// split with a numerator > denom.
-    pub numerator:   Decimal,
+    pub numerator: Decimal,
     /// Denominator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
     /// denom is 5). A reverse split is considered as nothing but a regular
@@ -358,7 +363,7 @@ pub struct Dividend {
     /// This is the price of the dividend
     pub amount: Decimal,
     /// This is the ex-dividend date
-    pub date:   u64,
+    pub date: u64,
 }
 
 /// This structure simply models a capital gain which has been recorded.
@@ -367,7 +372,7 @@ pub struct CapitalGain {
     /// This is the amount of capital gain distributed by the fund
     pub amount: f64,
     /// This is the recorded date of the capital gain
-    pub date:   u64,
+    pub date: u64,
 }
 
 #[cfg(test)]
@@ -385,9 +390,9 @@ mod tests {
         }
         "#;
         let period_info_expected = PeriodInfo {
-            timezone:  "EST".to_string(),
-            start:     1705501800,
-            end:       1705525200,
+            timezone: "EST".to_string(),
+            start: 1705501800,
+            end: 1705525200,
             gmtoffset: -18000,
         };
         let period_info_deserialized: PeriodInfo = serde_json::from_str(period_info_json).unwrap();
@@ -410,14 +415,14 @@ mod tests {
         ]
         "#;
         let trading_periods_expected = TradingPeriods {
-            pre:     None,
+            pre: None,
             regular: Some(vec![vec![PeriodInfo {
-                timezone:  "EST".to_string(),
-                start:     1705501800,
-                end:       1705525200,
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
                 gmtoffset: -18000,
             }]]),
-            post:    None,
+            post: None,
         };
         let trading_periods_deserialized: TradingPeriods =
             serde_json::from_str(trading_periods_json).unwrap();
@@ -441,14 +446,14 @@ mod tests {
         }
        "#;
         let trading_periods_expected = TradingPeriods {
-            pre:     None,
+            pre: None,
             regular: Some(vec![vec![PeriodInfo {
-                timezone:  "EST".to_string(),
-                start:     1705501800,
-                end:       1705525200,
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
                 gmtoffset: -18000,
             }]]),
-            post:    None,
+            post: None,
         };
         let trading_periods_deserialized: TradingPeriods =
             serde_json::from_str(trading_periods_json).unwrap();
@@ -492,22 +497,22 @@ mod tests {
         }
        "#;
         let trading_periods_expected = TradingPeriods {
-            pre:     Some(vec![vec![PeriodInfo {
-                timezone:  "EST".to_string(),
-                start:     1705482000,
-                end:       1705501800,
+            pre: Some(vec![vec![PeriodInfo {
+                timezone: "EST".to_string(),
+                start: 1705482000,
+                end: 1705501800,
                 gmtoffset: -18000,
             }]]),
             regular: Some(vec![vec![PeriodInfo {
-                timezone:  "EST".to_string(),
-                start:     1705501800,
-                end:       1705525200,
+                timezone: "EST".to_string(),
+                start: 1705501800,
+                end: 1705525200,
                 gmtoffset: -18000,
             }]]),
-            post:    Some(vec![vec![PeriodInfo {
-                timezone:  "EST".to_string(),
-                start:     1705525200,
-                end:       1705539600,
+            post: Some(vec![vec![PeriodInfo {
+                timezone: "EST".to_string(),
+                start: 1705525200,
+                end: 1705539600,
                 gmtoffset: -18000,
             }]]),
         };

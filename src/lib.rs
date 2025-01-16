@@ -212,8 +212,8 @@ macro_rules! YTICKER_QUERY {
 
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
-    client:     Client,
-    url:        &'static str,
+    client: Client,
+    url: &'static str,
     search_url: &'static str,
 }
 
@@ -229,15 +229,17 @@ impl YahooConnector {
     }
 
     pub fn builder() -> YahooConnectorBuilder {
-        YahooConnectorBuilder { inner: Client::builder() }
+        YahooConnectorBuilder {
+            inner: Client::builder(),
+        }
     }
 }
 
 impl Default for YahooConnector {
     fn default() -> Self {
         YahooConnector {
-            client:     Client::default(),
-            url:        YCHART_URL,
+            client: Client::default(),
+            url: YCHART_URL,
             search_url: YSEARCH_URL,
         }
     }
@@ -251,7 +253,11 @@ impl YahooConnectorBuilder {
     pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
         let client = Client::builder().user_agent(user_agent).build()?;
 
-        Ok(YahooConnector { client, url: YCHART_URL, search_url: YSEARCH_URL })
+        Ok(YahooConnector {
+            client,
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+        })
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {

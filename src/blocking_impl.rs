@@ -129,7 +129,10 @@ mod tests {
 
         assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
         assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
-        assert_eq!(&resp.chart.result[0].meta.first_trade_date, &Some(-252322200));
+        assert_eq!(
+            &resp.chart.result[0].meta.first_trade_date,
+            &Some(-252322200)
+        );
 
         let _ = resp.last_quote().unwrap();
     }
@@ -186,7 +189,9 @@ mod tests {
         let start = datetime!(2019-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
-        let response = provider.get_quote_history_interval("AAPL", start, end, "1mo").unwrap();
+        let response = provider
+            .get_quote_history_interval("AAPL", start, end, "1mo")
+            .unwrap();
         assert_eq!(&response.chart.result[0].timestamp.len(), &13);
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
