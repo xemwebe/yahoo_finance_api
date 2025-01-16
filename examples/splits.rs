@@ -1,16 +1,14 @@
 use std::time::{Duration, UNIX_EPOCH};
 
-use time::{macros::datetime, OffsetDateTime};
+use time::macros::datetime;
+use time::OffsetDateTime;
 
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
 #[tokio::main]
 async fn main() {
-    let conn = yahoo::YahooConnector::builder()
-        .timeout(Duration::from_secs(3))
-        .build()
-        .unwrap();
+    let conn = yahoo::YahooConnector::builder().timeout(Duration::from_secs(3)).build().unwrap();
 
     let ticker = "TSLA";
     let start = datetime!(2020-08-28 00:00:00.00 UTC);
