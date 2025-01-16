@@ -159,14 +159,15 @@ fn main() {
 "
 )]
 
+use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
-use reqwest::StatusCode;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
+use reqwest::{Proxy, StatusCode};
 
 // re-export time crate
 pub use quotes::decimal::Decimal;
@@ -176,8 +177,10 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split,
-    TradingPeriods, YChart, YMetaData, YQuoteBlock, YResponse,
+    AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
+    ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType,
+    Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+    YSummaryData,
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
@@ -200,15 +203,20 @@ macro_rules! YCHART_PERIOD_QUERY {
         "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains"
     };
 }
-macro_rules! YCHART_RANGE_QUERY {
+macro_rules! YCHART_PERIOD_QUERY_PRE_POST {
     () => {
-        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains&includePrePost={prepost}"
     };
 }
+macro_rules! YCHART_RANGE_QUERY {
+  () => {
+    "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+  };
+}
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
-    () => {
-        "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
-    };
+  () => {
+    "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
+  };
 }
 macro_rules! YTICKER_QUERY {
     () => {
@@ -226,11 +234,19 @@ pub struct YahooConnector {
     client: Client,
     url: &'static str,
     search_url: &'static str,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
+    cookie: Option<String>,
+    crumb: Option<String>,
 }
 
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
 }
 
 impl YahooConnector {
@@ -239,54 +255,11 @@ impl YahooConnector {
         Self::builder().build()
     }
 
-    pub fn set_up_new_proxy_agent_timeout(
-        url: &str,
-        auth: Option<(&str, &str)>,
-        user_agent: Option<&str>,
-        timeout: Option<Duration>,
-    ) -> Result<Self, YahooError> {
-        let client_builder = Client::builder();
-
-        let mut proxy = reqwest::Proxy::all(url)?;
-
-        if let Some((login, password)) = auth {
-            proxy = proxy.basic_auth(login, password);
-        };
-
-        let mut selected_user_agent = USER_AGENT;
-
-        if let Some(user_agent) = user_agent {
-            selected_user_agent = user_agent;
-        }
-
-        let mut selected_timeout = Duration::from_secs(60);
-
-        if let Some(timeout) = timeout {
-            selected_timeout = timeout;
-        }
-
-        let client = client_builder
-            .user_agent(selected_user_agent)
-            .proxy(proxy)
-            .timeout(selected_timeout)
-            .build()?;
-
-        Ok(YahooConnector {
-            client,
-            ..Default::default()
-        })
-    }
-
-    pub fn new_w_client(client: Client) -> Self {
-        YahooConnector {
-            client,
-            ..Default::default()
-        }
-    }
-
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: Client::builder().user_agent(USER_AGENT),
+            inner: Client::builder(),
+            user_agent: Some(USER_AGENT.to_string()),
+            ..Default::default()
         }
     }
 }
@@ -297,6 +270,11 @@ impl Default for YahooConnector {
             client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
+            timeout: None,
+            user_agent: Some(USER_AGENT.to_string()),
+            proxy: None,
+            cookie: None,
+            crumb: None,
         }
     }
 }
@@ -307,39 +285,41 @@ impl YahooConnectorBuilder {
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.inner = self.inner.timeout(timeout);
+        self.timeout = Some(timeout);
         self
     }
 
     pub fn user_agent(mut self, user_agent: &str) -> Self {
-        self.inner = self.inner.user_agent(user_agent);
+        self.user_agent = Some(user_agent.to_string());
         self
     }
 
-    pub fn proxy(mut self, url: &str, auth: Option<(&str, &str)>) -> Self {
-        let proxy = reqwest::Proxy::all(url).unwrap();
-
-        let client_builder = if auth.is_some() {
-            let (login, password) = auth.expect("Conditioned");
-            self.inner.proxy(proxy.basic_auth(login, password))
-        } else {
-            self.inner.proxy(proxy)
-        };
-
-        self.inner = client_builder;
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.proxy = Some(proxy);
         self
     }
 
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
+    pub fn build(mut self) -> Result<YahooConnector, YahooError> {
+        if let Some(timeout) = &self.timeout {
+            self.inner = self.inner.timeout(timeout.clone());
+        }
+        if let Some(user_agent) = &self.user_agent {
+            self.inner = self.inner.user_agent(user_agent.clone());
+        }
+        if let Some(proxy) = &self.proxy {
+            self.inner = self.inner.proxy(proxy.clone());
+        }
+
         Ok(YahooConnector {
             client: self.inner.build()?,
+            timeout: self.timeout,
+            user_agent: self.user_agent,
+            proxy: self.proxy,
             ..Default::default()
         })
     }
 
-    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder().user_agent(user_agent).build()?;
-
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
             ..Default::default()

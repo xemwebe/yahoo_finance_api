@@ -1,9 +1,8 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
+use std::fmt;
 
-use serde::{
-    de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
-    Deserialize, Serialize,
-};
+use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Serialize};
 
 use super::YahooError;
 
@@ -104,6 +103,7 @@ impl YResponse {
         }
         Ok(vec![])
     }
+
     /// This method retrieves information about the dividends that have
     /// been recorded during the considered time period.
     ///
@@ -168,8 +168,11 @@ pub struct YQuoteBlock {
 pub struct YMetaData {
     pub currency: Option<String>,
     pub symbol: String,
-    pub exchange_name: String,
+    pub long_name: String,
+    pub short_name: String,
     pub instrument_type: String,
+    pub exchange_name: String,
+    pub full_exchange_name: String,
     #[serde(default)]
     pub first_trade_date: Option<i32>,
     pub regular_market_time: u32,
@@ -179,6 +182,12 @@ pub struct YMetaData {
     pub regular_market_price: Decimal,
     pub chart_previous_close: Decimal,
     pub previous_close: Option<Decimal>,
+    pub has_pre_post_market_data: bool,
+    pub fifty_two_week_high: Decimal,
+    pub fifty_two_week_low: Decimal,
+    pub regular_market_day_high: Option<Decimal>,
+    pub regular_market_day_low: Option<Decimal>,
+    pub regular_market_volume: Option<Decimal>,
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
@@ -223,9 +232,12 @@ impl<'de> Deserialize<'de> for TradingPeriods {
             where
                 V: SeqAccess<'de>,
             {
-                let regular: Vec<PeriodInfo> = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let mut regular: Vec<PeriodInfo> = Vec::new();
+
+                while let Ok(Some(mut e)) = seq.next_element::<Vec<PeriodInfo>>() {
+                    regular.append(&mut e);
+                }
+
                 Ok(TradingPeriods {
                     pre: None,
                     regular: Some(vec![regular]),
@@ -376,9 +388,23 @@ pub struct CapitalGain {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct YQuoteSummary {
     #[serde(rename = "quoteSummary")]
-    pub quote_summary: ExtendedQuoteSummary,
+    pub quote_summary: Option<ExtendedQuoteSummary>,
+    pub finance: Option<YFinance>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YFinance {
+    pub result: Option<serde_json::Value>,
+    pub error: Option<YErrorMessage>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YErrorMessage {
+    pub code: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -394,106 +420,217 @@ impl YQuoteSummary {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct YSummaryData {
-    #[serde(rename = "assetProfile")]
-    pub asset_profile: AssetProfile,
-    #[serde(rename = "summaryDetail")]
-    pub summary_detail: SummaryDetail,
-    #[serde(rename = "defaultKeyStatistics")]
-    pub default_key_statistics: DefaultKeyStatistics,
-    #[serde(rename = "quoteType")]
-    pub quote_type: QuoteType,
-    #[serde(rename = "financialData")]
-    pub financial_data: FinancialData,
+    pub asset_profile: Option<AssetProfile>,
+    pub summary_detail: Option<SummaryDetail>,
+    pub default_key_statistics: Option<DefaultKeyStatistics>,
+    pub quote_type: Option<QuoteType>,
+    pub financial_data: Option<FinancialData>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AssetProfile {
-    pub address1: String,
-    pub city: String,
-    pub state: String,
-    pub zip: String,
-    pub country: String,
-    pub phone: String,
-    pub website: String,
-    pub industry: String,
-    pub sector: String,
-    #[serde(rename = "longBusinessSummary")]
-    pub long_business_summary: String,
-    #[serde(rename = "fullTimeEmployees")]
-    pub full_time_employees: u32,
-    #[serde(rename = "companyOfficers")]
+    pub address1: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub zip: Option<String>,
+    pub country: Option<String>,
+    pub phone: Option<String>,
+    pub website: Option<String>,
+    pub industry: Option<String>,
+    pub sector: Option<String>,
+    pub long_business_summary: Option<String>,
+    pub full_time_employees: Option<u32>,
     pub company_officers: Vec<CompanyOfficer>,
+    pub audit_risk: Option<u16>,
+    pub board_risk: Option<u16>,
+    pub compensation_risk: Option<u16>,
+    pub share_holder_rights_risk: Option<u16>,
+    pub overall_risk: Option<u16>,
+    pub governance_epoch_date: Option<u32>,
+    pub compensation_as_of_epoch_date: Option<u32>,
+    pub ir_website: Option<String>,
+    pub max_age: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CompanyOfficer {
     pub name: String,
     pub age: Option<u32>,
     pub title: String,
-    #[serde(rename = "yearBorn")]
     pub year_born: Option<u32>,
-    #[serde(rename = "fiscalYear")]
     pub fiscal_year: u32,
-    #[serde(rename = "totalPay")]
     pub total_pay: Option<ValueWrapper>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ValueWrapper {
     pub raw: Option<u64>,
     pub fmt: Option<String>,
-    #[serde(rename = "longFmt")]
     pub long_fmt: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SummaryDetail {
-    #[serde(rename = "previousClose")]
-    pub previous_close: f64,
-    pub open: f64,
-    #[serde(rename = "dayLow")]
-    pub day_low: f64,
-    #[serde(rename = "dayHigh")]
-    pub day_high: f64,
-    #[serde(rename = "regularMarketVolume")]
-    pub regular_market_volume: u64,
-    #[serde(rename = "marketCap")]
-    pub market_cap: u64,
-    pub currency: String,
+    pub max_age: Option<i64>,
+    pub price_hint: Option<i64>,
+    pub previous_close: Option<f64>,
+    pub open: Option<f64>,
+    pub day_low: Option<f64>,
+    pub day_high: Option<f64>,
+    pub regular_market_previous_close: Option<f64>,
+    pub regular_market_open: Option<f64>,
+    pub regular_market_day_low: Option<f64>,
+    pub regular_market_day_high: Option<f64>,
+    pub dividend_rate: Option<f64>,
+    pub dividend_yield: Option<f64>,
+    pub ex_dividend_date: Option<i64>,
+    pub payout_ratio: Option<f64>,
+    pub five_year_avg_dividend_yield: Option<f64>,
+    pub beta: Option<f64>,
+    #[serde(rename = "trailingPE")]
+    pub trailing_pe: Option<f64>,
+    #[serde(rename = "forwardPE")]
+    pub forward_pe: Option<f64>,
+    pub volume: Option<u64>,
+    pub regular_market_volume: Option<u64>,
+    pub average_volume: Option<u64>,
+    #[serde(rename = "averageVolume10days")]
+    pub average_volume_10days: Option<u64>,
+    #[serde(rename = "averageDailyVolume10Day")]
+    pub average_daily_volume_10day: Option<u64>,
+    pub bid: Option<f64>,
+    pub ask: Option<f64>,
+    pub bid_size: Option<i64>,
+    pub ask_size: Option<i64>,
+    pub market_cap: Option<u64>,
+    pub fifty_two_week_low: Option<f64>,
+    pub fifty_two_week_high: Option<f64>,
+    #[serde(rename = "priceToSalesTrailing12Months")]
+    pub price_to_sales_trailing12months: Option<f64>,
+    pub fifty_day_average: Option<f64>,
+    pub two_hundred_day_average: Option<f64>,
+    pub trailing_annual_dividend_rate: Option<f64>,
+    pub trailing_annual_dividend_yield: Option<f64>,
+    pub currency: Option<String>,
+    pub from_currency: Option<String>,
+    pub to_currency: Option<String>,
+    pub last_market: Option<String>,
+    pub coin_market_cap_link: Option<String>,
+    pub algorithm: Option<String>,
+    pub tradeable: Option<bool>,
+    pub expire_date: Option<u32>,
+    pub strike_price: Option<u32>,
+    pub open_interest: Option<Decimal>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DefaultKeyStatistics {
-    #[serde(rename = "enterpriseValue")]
-    pub enterprise_value: u64,
-    #[serde(rename = "profitMargins")]
-    pub profit_margins: f64,
-    #[serde(rename = "sharesOutstanding")]
-    pub shares_outstanding: u64,
+    pub max_age: Option<u64>,
+    pub price_hint: Option<u64>,
+    pub enterprise_value: Option<u64>,
+    #[serde(rename = "forwardPE")]
+    pub forward_pe: Option<f64>,
+    pub profit_margins: Option<f64>,
+    pub float_shares: Option<u64>,
+    pub shares_outstanding: Option<u64>,
+    pub shares_short: Option<u64>,
+    pub shares_short_prior_month: Option<u64>,
+    pub shares_short_previous_month_date: Option<u64>,
+    pub date_short_interest: Option<u64>,
+    pub shares_percent_shares_out: Option<f64>,
+    pub held_percent_insiders: Option<f64>,
+    pub held_percent_institutions: Option<f64>,
+    pub short_ratio: Option<f64>,
+    pub short_percent_of_float: Option<f64>,
+    pub beta: Option<f64>,
+    pub implied_shares_outstanding: Option<u64>,
+    pub category: Option<String>,
+    pub book_value: Option<f64>,
+    pub price_to_book: Option<f64>,
+    pub fund_family: Option<String>,
+    pub fund_inception_date: Option<u32>,
+    pub legal_type: Option<String>,
+    pub last_fiscal_year_end: Option<u64>,
+    pub next_fiscal_year_end: Option<u64>,
+    pub most_recent_quarter: Option<u64>,
+    pub earnings_quarterly_growth: Option<f64>,
+    pub net_income_to_common: Option<u64>,
+    pub trailing_eps: Option<f64>,
+    pub forward_eps: Option<f64>,
+    pub last_split_factor: Option<String>,
+    pub last_split_date: Option<u64>,
+    pub enterprise_to_revenue: Option<f64>,
+    pub enterprise_to_ebitda: Option<f64>,
+    #[serde(rename = "52WeekChange")]
+    pub fifty_two_week_change: Option<f64>,
+    #[serde(rename = "SandP52WeekChange")]
+    pub sand_p_fifty_two_week_change: Option<f64>,
+    pub last_dividend_value: Option<f64>,
+    pub last_dividend_date: Option<u64>,
+    pub latest_share_class: Option<String>,
+    pub lead_investor: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct QuoteType {
-    pub exchange: String,
-    pub symbol: String,
-    #[serde(rename = "longName")]
-    pub long_name: String,
+    pub exchange: Option<String>,
+    pub quote_type: Option<String>,
+    pub symbol: Option<String>,
+    pub underlying_symbol: Option<String>,
+    pub short_name: Option<String>,
+    pub long_name: Option<String>,
+    pub first_trade_date_epoch_utc: Option<u64>,
     #[serde(rename = "timeZoneFullName")]
-    pub timezone_full_name: String,
+    pub timezone_full_name: Option<String>,
+    #[serde(rename = "timeZoneShortName")]
+    pub timezone_short_name: Option<String>,
+    pub uuid: Option<String>,
+    pub message_board_id: Option<String>,
+    pub gmt_off_set_milliseconds: Option<i64>,
+    pub max_age: Option<u64>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct FinancialData {
-    #[serde(rename = "currentPrice")]
-    pub current_price: f64,
-    #[serde(rename = "totalCash")]
-    pub total_cash: u64,
-    pub ebitda: u64,
-    #[serde(rename = "totalDebt")]
-    pub total_debt: u64,
-    #[serde(rename = "totalRevenue")]
-    pub total_revenue: u64,
+    pub max_age: Option<u64>,
+    pub current_price: Option<f64>,
+    pub target_high_price: Option<f64>,
+    pub target_low_price: Option<f64>,
+    pub target_mean_price: Option<f64>,
+    pub target_median_price: Option<f64>,
+    pub recommendation_mean: Option<f64>,
+    pub recommendation_key: Option<String>,
+    pub number_of_analyst_opinions: Option<u64>,
+    pub total_cash: Option<u64>,
+    pub total_cash_per_share: Option<f64>,
+    pub ebitda: Option<u64>,
+    pub total_debt: Option<u64>,
+    pub quick_ratio: Option<f64>,
+    pub current_ratio: Option<f64>,
+    pub total_revenue: Option<u64>,
+    pub debt_to_equity: Option<f64>,
+    pub revenue_per_share: Option<f64>,
+    pub return_on_assets: Option<f64>,
+    pub return_on_equity: Option<f64>,
+    pub gross_profits: Option<u64>,
+    pub free_cashflow: Option<u64>,
+    pub operating_cashflow: Option<u64>,
+    pub earnings_growth: Option<f64>,
+    pub revenue_growth: Option<f64>,
+    pub gross_margins: Option<f64>,
+    pub ebitda_margins: Option<f64>,
+    pub operating_margins: Option<f64>,
+    pub profit_margins: Option<f64>,
+    pub financial_currency: Option<String>,
 }
 
 #[cfg(test)]
