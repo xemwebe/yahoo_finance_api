@@ -194,9 +194,6 @@ const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb
 const Y_COOKIE_REQUEST_HEADER: &str = "set-cookie";
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
-// Default value for reqwest is 30 seconds
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
     () => {
