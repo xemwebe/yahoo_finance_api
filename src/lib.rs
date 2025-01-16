@@ -194,6 +194,9 @@ const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb
 const Y_COOKIE_REQUEST_HEADER: &str = "set-cookie";
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
+// Default value for reqwest is 30 seconds
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
     () => {
@@ -239,51 +242,6 @@ impl YahooConnector {
         Self::builder().build()
     }
 
-    pub fn set_up_new_proxy_agent_timeout(
-        url: &str,
-        auth: Option<(&str, &str)>,
-        user_agent: Option<&str>,
-        timeout: Option<Duration>,
-    ) -> Result<Self, YahooError> {
-        let client_builder = Client::builder();
-
-        let mut proxy = reqwest::Proxy::all(url)?;
-
-        if let Some((login, password)) = auth {
-            proxy = proxy.basic_auth(login, password);
-        };
-
-        let mut selected_user_agent = USER_AGENT;
-
-        if let Some(user_agent) = user_agent {
-            selected_user_agent = user_agent;
-        }
-
-        let mut selected_timeout = Duration::from_secs(60);
-
-        if let Some(timeout) = timeout {
-            selected_timeout = timeout;
-        }
-
-        let client = client_builder
-            .user_agent(selected_user_agent)
-            .proxy(proxy)
-            .timeout(selected_timeout)
-            .build()?;
-
-        Ok(YahooConnector {
-            client,
-            ..Default::default()
-        })
-    }
-
-    pub fn new_w_client(client: Client) -> Self {
-        YahooConnector {
-            client,
-            ..Default::default()
-        }
-    }
-
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
             inner: Client::builder().user_agent(USER_AGENT),
@@ -317,16 +275,13 @@ impl YahooConnectorBuilder {
     }
 
     pub fn proxy(mut self, url: &str, auth: Option<(&str, &str)>) -> Self {
-        let proxy = reqwest::Proxy::all(url).unwrap();
+        let mut proxy = reqwest::Proxy::all(url).unwrap();
 
-        let client_builder = if auth.is_some() {
-            let (login, password) = auth.expect("Conditioned");
-            self.inner.proxy(proxy.basic_auth(login, password))
-        } else {
-            self.inner.proxy(proxy)
-        };
+        if let Some((login, password)) = auth {
+            proxy = proxy.basic_auth(login, password);
+        }
 
-        self.inner = client_builder;
+        self.inner = self.inner.proxy(proxy);
         self
     }
 
@@ -337,9 +292,16 @@ impl YahooConnectorBuilder {
         })
     }
 
-    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
+    pub fn build_with_agent(user_agent: &str) -> Result<YahooConnector, YahooError> {
         let client = Client::builder().user_agent(user_agent).build()?;
 
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
+    }
+
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
             ..Default::default()
