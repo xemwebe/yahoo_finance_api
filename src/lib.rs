@@ -239,9 +239,54 @@ impl YahooConnector {
         Self::builder().build()
     }
 
+    pub fn set_up_new_proxy_agent_timeout(
+        url: &str,
+        auth: Option<(&str, &str)>,
+        user_agent: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Self, YahooError> {
+        let client_builder = Client::builder();
+
+        let mut proxy = reqwest::Proxy::all(url)?;
+
+        if let Some((login, password)) = auth {
+            proxy = proxy.basic_auth(login, password);
+        };
+
+        let mut selected_user_agent = USER_AGENT;
+
+        if let Some(user_agent) = user_agent {
+            selected_user_agent = user_agent;
+        }
+
+        let mut selected_timeout = Duration::from_secs(60);
+
+        if let Some(timeout) = timeout {
+            selected_timeout = timeout;
+        }
+
+        let client = client_builder
+            .user_agent(selected_user_agent)
+            .proxy(proxy)
+            .timeout(selected_timeout)
+            .build()?;
+
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
+    }
+
+    pub fn new_w_client(client: Client) -> Self {
+        YahooConnector {
+            client,
+            ..Default::default()
+        }
+    }
+
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: Client::builder(),
+            inner: Client::builder().user_agent(USER_AGENT),
         }
     }
 }
@@ -257,8 +302,39 @@ impl Default for YahooConnector {
 }
 
 impl YahooConnectorBuilder {
+    pub fn new() -> Self {
+        YahooConnector::builder()
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.inner = self.inner.timeout(timeout);
+        self
+    }
+
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.inner = self.inner.user_agent(user_agent);
+        self
+    }
+
+    pub fn proxy(mut self, url: &str, auth: Option<(&str, &str)>) -> Self {
+        let proxy = reqwest::Proxy::all(url).unwrap();
+
+        let client_builder = if auth.is_some() {
+            let (login, password) = auth.expect("Conditioned");
+            self.inner.proxy(proxy.basic_auth(login, password))
+        } else {
+            self.inner.proxy(proxy)
+        };
+
+        self.inner = client_builder;
+        self
+    }
+
     pub fn build(self) -> Result<YahooConnector, YahooError> {
-        self.build_with_agent(USER_AGENT)
+        Ok(YahooConnector {
+            client: self.inner.build()?,
+            ..Default::default()
+        })
     }
 
     pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
@@ -266,15 +342,8 @@ impl YahooConnectorBuilder {
 
         Ok(YahooConnector {
             client,
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
+            ..Default::default()
         })
-    }
-
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.inner = self.inner.timeout(timeout);
-
-        self
     }
 }
 
