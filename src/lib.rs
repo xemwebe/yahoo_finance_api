@@ -296,15 +296,6 @@ impl YahooConnectorBuilder {
         })
     }
 
-    pub fn build_with_agent(user_agent: &str) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder().user_agent(user_agent).build()?;
-
-        Ok(YahooConnector {
-            client,
-            ..Default::default()
-        })
-    }
-
     pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
