@@ -185,9 +185,9 @@ pub struct YMetaData {
     pub has_pre_post_market_data: bool,
     pub fifty_two_week_high: Decimal,
     pub fifty_two_week_low: Decimal,
-    pub regular_market_day_high: Decimal,
-    pub regular_market_day_low: Decimal,
-    pub regular_market_volume: Decimal,
+    pub regular_market_day_high: Option<Decimal>,
+    pub regular_market_day_low: Option<Decimal>,
+    pub regular_market_volume: Option<Decimal>,
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
