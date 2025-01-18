@@ -164,9 +164,9 @@ use time::OffsetDateTime;
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
-use reqwest::StatusCode;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
+use reqwest::{Proxy, StatusCode};
 
 // re-export time crate
 pub use quotes::decimal::Decimal;
@@ -231,6 +231,9 @@ pub struct YahooConnector {
     client: Client,
     url: &'static str,
     search_url: &'static str,
+    timeout: Duration,
+    user_agent: String,
+    proxy: Proxy,
 }
 
 #[derive(Default)]
