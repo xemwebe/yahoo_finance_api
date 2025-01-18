@@ -246,7 +246,7 @@ impl YahooConnector {
 
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: Client::builder(),
+            inner: Client::builder().user_agent(USER_AGENT),
         }
     }
 }
@@ -262,24 +262,43 @@ impl Default for YahooConnector {
 }
 
 impl YahooConnectorBuilder {
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
-        self.build_with_agent(USER_AGENT)
-    }
-
-    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder().user_agent(user_agent).build()?;
-
-        Ok(YahooConnector {
-            client,
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        })
+    pub fn new() -> Self {
+        YahooConnector::builder()
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.inner = self.inner.timeout(timeout);
-
         self
+    }
+
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.inner = self.inner.user_agent(user_agent);
+        self
+    }
+
+    pub fn proxy(mut self, url: &str, auth: Option<(&str, &str)>) -> Self {
+        let mut proxy = reqwest::Proxy::all(url).unwrap();
+
+        if let Some((login, password)) = auth {
+            proxy = proxy.basic_auth(login, password);
+        }
+
+        self.inner = self.inner.proxy(proxy);
+        self
+    }
+
+    pub fn build(self) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client: self.inner.build()?,
+            ..Default::default()
+        })
+    }
+
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
     }
 }
 
