@@ -164,9 +164,9 @@ use time::OffsetDateTime;
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
-use reqwest::StatusCode;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
+use reqwest::{Proxy, StatusCode};
 
 // re-export time crate
 pub use quotes::decimal::Decimal;
@@ -271,13 +271,7 @@ impl YahooConnectorBuilder {
         self
     }
 
-    pub fn proxy(mut self, url: &str, auth: Option<(&str, &str)>) -> Self {
-        let mut proxy = reqwest::Proxy::all(url).unwrap();
-
-        if let Some((login, password)) = auth {
-            proxy = proxy.basic_auth(login, password);
-        }
-
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.inner = self.inner.proxy(proxy);
         self
     }
