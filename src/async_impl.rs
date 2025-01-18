@@ -461,8 +461,8 @@ mod tests {
 
         let result = tokio_test::block_on(provider.get_ticker_info("AAPL"));
 
-        let quote_summary = result.unwrap().quote_summary;
-        assert!("Cupertino" == quote_summary.unwrap().result[0].asset_profile.city);
+        let quote_summary = result.unwrap().quote_summary.unwrap();
+        assert!("Cupertino" == quote_summary.result[0].asset_profile.city);
         // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 

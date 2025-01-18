@@ -430,8 +430,9 @@ mod tests {
 
         let result = provider.get_ticker_info("AAPL");
 
-        let quote_summary = result.unwrap().quote_summary;
-        assert!("Cupertino" == quote_summary.result[0].asset_profile.city); // Testing it retrieved info, hard coded but shouldn't change anytime soon
+        let quote_summary = result.unwrap().quote_summary.unwrap();
+        assert!("Cupertino" == quote_summary.result[0].asset_profile.city);
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 
     #[test]
