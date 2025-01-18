@@ -20,4 +20,12 @@ pub enum YahooError {
     NoCookies,
     #[error("Invisible characters in cookies")]
     InvisibleAsciiInCookies,
+    #[error("No response")]
+    NoResponse,
+    #[error("Invalid cookie")]
+    InvalidCookie,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Invalid crumb")]
+    InvalidCrumb,
 }

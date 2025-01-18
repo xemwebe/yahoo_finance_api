@@ -123,7 +123,6 @@ impl YahooConnector {
         if let None = &self.crumb {
             self.crumb = Some(self.get_crumb().await?);
         }
-
         let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
         let url = reqwest::Url::parse(
             &(format!(
@@ -135,28 +134,46 @@ impl YahooConnector {
 
         cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
 
-        Ok(self
-            .create_client(Some(cookie_provider))
-            .await?
-            .get(url.unwrap())
-            .send()
-            .await?
-            .json()
-            .await?)
-    }
+        let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
 
-    async fn get_cookie(&mut self) -> Result<String, YahooError> {
-        Ok(self
-            .client
-            .get(Y_GET_COOKIE_URL)
-            .send()
-            .await?
-            .headers()
-            .get(Y_COOKIE_REQUEST_HEADER)
-            .ok_or(YahooError::NoCookies)?
-            .to_str()
-            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
-            .to_string())
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))
+                .await?
+                .get(url.clone().unwrap())
+                .send()
+                .await?
+                .json()
+                .await?);
+
+            if let Ok(result) = &result {
+                if let Some(finance) = &result.finance {
+                    if let Some(error) = &finance.error {
+                        if let Some(description) = &error.description {
+                            if description.contains("Invalid Crumb") {
+                                self.crumb = Some(self.get_crumb().await?);
+                                if i == max_retries {
+                                    return Err(YahooError::InvalidCrumb);
+                                }
+                            }
+                        }
+                        if let Some(code) = &error.code {
+                            if code.contains("Unauthorized") {
+                                println!("Unauthorized {:?}", i);
+                                self.crumb = Some(self.get_crumb().await?);
+                                if i == max_retries {
+                                    return Err(YahooError::Unauthorized);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
     }
 
     async fn get_crumb(&mut self) -> Result<String, YahooError> {
@@ -170,14 +187,47 @@ impl YahooConnector {
             &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap(),
         );
 
+        let mut result = Err(YahooError::NoResponse);
+
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))
+                .await?
+                .get(Y_GET_CRUMB_URL)
+                .send()
+                .await?
+                .text()
+                .await?);
+
+            if let Ok(result) = &result {
+                if result.contains("Invalid Cookie") {
+                    self.cookie = Some(self.get_cookie().await?);
+                    if i == max_retries {
+                        return Err(YahooError::InvalidCookie);
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
+    }
+
+    async fn get_cookie(&mut self) -> Result<String, YahooError> {
+        println!("get_cookie()");
+
         Ok(self
-            .create_client(Some(cookie_provider))
-            .await?
-            .get(Y_GET_CRUMB_URL)
+            .client
+            .get(Y_GET_COOKIE_URL)
             .send()
             .await?
-            .text()
-            .await?)
+            .headers()
+            .get(Y_COOKIE_REQUEST_HEADER)
+            .ok_or(YahooError::NoCookies)?
+            .to_str()
+            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
+            .to_string())
     }
 
     async fn create_client(
@@ -412,7 +462,8 @@ mod tests {
         let result = tokio_test::block_on(provider.get_ticker_info("AAPL"));
 
         let quote_summary = result.unwrap().quote_summary;
-        assert!("Cupertino" == quote_summary.result[0].asset_profile.city); // Testing it retrieved info, hard coded but shouldn't change anytime soon
+        assert!("Cupertino" == quote_summary.unwrap().result[0].asset_profile.city);
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 
     #[tokio::test]
