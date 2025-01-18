@@ -118,7 +118,6 @@ impl YahooConnector {
         if let None = &self.crumb {
             self.crumb = Some(self.get_crumb()?);
         }
-
         let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
         let url = reqwest::Url::parse(
             &(format!(
@@ -130,24 +129,43 @@ impl YahooConnector {
 
         cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
 
-        Ok(self
-            .create_client(Some(cookie_provider))?
-            .get(url.unwrap())
-            .send()?
-            .json()?)
-    }
+        let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
 
-    fn get_cookie(&mut self) -> Result<String, YahooError> {
-        Ok(self
-            .client
-            .get(Y_GET_COOKIE_URL)
-            .send()?
-            .headers()
-            .get(Y_COOKIE_REQUEST_HEADER)
-            .ok_or(YahooError::NoCookies)?
-            .to_str()
-            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
-            .to_string())
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))?
+                .get(url.clone().unwrap())
+                .send()?
+                .json()?);
+
+            if let Ok(result) = &result {
+                if let Some(finance) = &result.finance {
+                    if let Some(error) = &finance.error {
+                        if let Some(description) = &error.description {
+                            if description.contains("Invalid Crumb") {
+                                self.crumb = Some(self.get_crumb()?);
+                                if i == max_retries {
+                                    return Err(YahooError::InvalidCrumb);
+                                }
+                            }
+                        }
+                        if let Some(code) = &error.code {
+                            if code.contains("Unauthorized") {
+                                println!("Unauthorized {:?}", i);
+                                self.crumb = Some(self.get_crumb()?);
+                                if i == max_retries {
+                                    return Err(YahooError::Unauthorized);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
     }
 
     fn get_crumb(&mut self) -> Result<String, YahooError> {
@@ -161,11 +179,43 @@ impl YahooConnector {
             &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap(),
         );
 
+        let mut result = Err(YahooError::NoResponse);
+
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))?
+                .get(Y_GET_CRUMB_URL)
+                .send()?
+                .text()?);
+
+            if let Ok(result) = &result {
+                if result.contains("Invalid Cookie") {
+                    self.cookie = Some(self.get_cookie()?);
+                    if i == max_retries {
+                        return Err(YahooError::InvalidCookie);
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
+    }
+
+    fn get_cookie(&mut self) -> Result<String, YahooError> {
+        println!("get_cookie()");
+
         Ok(self
-            .create_client(Some(cookie_provider))?
-            .get(Y_GET_CRUMB_URL)
+            .client
+            .get(Y_GET_COOKIE_URL)
             .send()?
-            .text()?)
+            .headers()
+            .get(Y_COOKIE_REQUEST_HEADER)
+            .ok_or(YahooError::NoCookies)?
+            .to_str()
+            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
+            .to_string())
     }
 
     fn create_client(
