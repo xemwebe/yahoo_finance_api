@@ -529,7 +529,7 @@ pub struct DefaultKeyStatistics {
     pub book_value: Option<f64>,
     pub price_to_book: Option<f64>,
     pub fund_family: Option<String>,
-    pub fundInceptionDate: Option<u32>,
+    pub fund_inception_date: Option<u32>,
     pub legal_type: Option<String>,
     pub last_fiscal_year_end: Option<u64>,
     pub next_fiscal_year_end: Option<u64>,
@@ -556,11 +556,20 @@ pub struct DefaultKeyStatistics {
 #[serde(rename_all = "camelCase")]
 pub struct QuoteType {
     pub exchange: Option<String>,
+    pub quote_type: Option<String>,
     pub symbol: Option<String>,
+    pub underlying_symbol: Option<String>,
+    pub short_name: Option<String>,
     pub long_name: Option<String>,
+    pub first_trade_date_epoch_utc: Option<u64>,
     #[serde(rename = "timeZoneFullName")]
     pub timezone_full_name: Option<String>,
+    #[serde(rename = "timeZoneShortName")]
+    pub timezone_short_name: Option<String>,
     pub uuid: Option<String>,
+    pub message_board_id: Option<String>,
+    pub gmt_off_set_milliseconds: Option<i64>,
+    pub max_age: Option<u64>,
 }
 
 #[derive(Deserialize, Debug)]

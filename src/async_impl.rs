@@ -376,6 +376,16 @@ mod tests {
 
         assert!(result.is_ok());
         let quote_summary = result.unwrap().quote_summary;
-        assert!("Cupertino" == quote_summary.result[0].asset_profile.city); // Testing it retrieved info, hard coded but shouldn't change anytime soon
+        assert!(
+            "Cupertino"
+                == quote_summary.result[0]
+                    .asset_profile
+                    .as_ref()
+                    .unwrap()
+                    .city
+                    .as_ref()
+                    .unwrap()
+        );
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 }
