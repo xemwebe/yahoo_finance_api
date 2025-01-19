@@ -460,7 +460,7 @@ pub struct SummaryDetail {
     pub open: Option<f64>,
     pub day_low: Option<f64>,
     pub day_high: Option<f64>,
-    pub regular_market_previous_close: f64,
+    pub regular_market_previous_close: Option<f64>,
     pub regular_market_open: Option<f64>,
     pub regular_market_day_low: Option<f64>,
     pub regular_market_day_high: Option<f64>,
