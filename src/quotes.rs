@@ -501,6 +501,9 @@ pub struct SummaryDetail {
     pub coin_market_cap_link: Option<String>,
     pub algorithm: Option<String>,
     pub tradeable: Option<bool>,
+    pub expire_date: Option<u32>,
+    pub strike_price: Option<u32>,
+    pub open_interest: Option<Decimal>,
 }
 
 #[derive(Deserialize, Debug)]
