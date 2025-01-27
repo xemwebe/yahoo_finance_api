@@ -1,461 +1,455 @@
 use super::*;
 
 impl YahooConnector {
-    /// Retrieve the quotes of the last day for the given ticker
-    pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
-        self.get_quote_range(ticker, interval, "1mo")
+  /// Retrieve the quotes of the last day for the given ticker
+  pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
+    self.get_quote_range(ticker, interval, "1mo")
+  }
+
+  /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available
+  pub fn get_quote_history(
+    &self,
+    ticker: &str,
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+  ) -> Result<YResponse, YahooError> {
+    self.get_quote_history_interval(ticker, start, end, "1d")
+  }
+
+  /// Retrieve quotes for the given ticker for an arbitrary range
+  pub fn get_quote_range(
+    &self,
+    ticker: &str,
+    interval: &str,
+    range: &str,
+  ) -> Result<YResponse, YahooError> {
+    let url: String = format!(
+      YCHART_RANGE_QUERY!(),
+      url = self.url,
+      symbol = ticker,
+      interval = interval,
+      range = range
+    );
+    YResponse::from_json(self.send_request(&url)?)
+  }
+
+  /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
+  pub fn get_quote_history_interval(
+    &self,
+    ticker: &str,
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+    interval: &str,
+  ) -> Result<YResponse, YahooError> {
+    let url = format!(
+      YCHART_PERIOD_QUERY!(),
+      url = self.url,
+      symbol = ticker,
+      start = start.unix_timestamp(),
+      end = end.unix_timestamp(),
+      interval = interval,
+    );
+    YResponse::from_json(self.send_request(&url)?)
+  }
+
+  /// Retrieve the quote history for the given ticker form date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
+  pub fn get_quote_history_interval_prepost(
+    &self,
+    ticker: &str,
+    start: OffsetDateTime,
+    end: OffsetDateTime,
+    interval: &str,
+    prepost: bool,
+  ) -> Result<YResponse, YahooError> {
+    let url = format!(
+      YCHART_PERIOD_QUERY_PRE_POST!(),
+      url = self.url,
+      symbol = ticker,
+      start = start.unix_timestamp(),
+      end = end.unix_timestamp(),
+      interval = interval,
+      prepost = prepost,
+    );
+    YResponse::from_json(self.send_request(&url)?)
+  }
+
+  /// Retrieve the quote history for the given ticker for a given period and ticker interval and optionally before and after regular trading hours
+  pub fn get_quote_period_interval(
+    &self,
+    ticker: &str,
+    period: &str,
+    interval: &str,
+    prepost: bool,
+  ) -> Result<YResponse, YahooError> {
+    let url = format!(
+      YCHART_PERIOD_INTERVAL_QUERY!(),
+      url = self.url,
+      symbol = ticker,
+      period = period,
+      interval = interval,
+      prepost = prepost,
+    );
+    YResponse::from_json(self.send_request(&url)?)
+  }
+
+  /// Retrieve the list of quotes found searching a given name
+  pub fn search_ticker_opt(&self, name: &str) -> Result<YSearchResultOpt, YahooError> {
+    let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
+    YSearchResultOpt::from_json(self.send_request(&url)?)
+  }
+
+  /// Retrieve the list of quotes found searching a given name
+  pub fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
+    let result = self.search_ticker_opt(name)?;
+    Ok(YSearchResult::from_opt(&result))
+  }
+
+  /// Get list for options for a given name
+  pub fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
+    let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
+    let resp = self.client.get(url).send()?;
+    let resp = resp.json::<YOptionChain>()?;
+
+    Ok(resp)
+  }
+
+  // Get symbol metadata
+  pub fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
+    if let None = &self.crumb {
+      self.crumb = Some(self.get_crumb()?);
     }
+    let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+    let url = reqwest::Url::parse(
+      &(format!(YQUOTE_SUMMARY_QUERY!(), symbol = symbol, crumb = self.crumb.as_ref().unwrap())),
+    );
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available
-    pub fn get_quote_history(
-        &self,
-        ticker: &str,
-        start: OffsetDateTime,
-        end: OffsetDateTime,
-    ) -> Result<YResponse, YahooError> {
-        self.get_quote_history_interval(ticker, start, end, "1d")
-    }
+    cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
 
-    /// Retrieve quotes for the given ticker for an arbitrary range
-    pub fn get_quote_range(
-        &self,
-        ticker: &str,
-        interval: &str,
-        range: &str,
-    ) -> Result<YResponse, YahooError> {
-        let url: String = format!(
-            YCHART_RANGE_QUERY!(),
-            url = self.url,
-            symbol = ticker,
-            interval = interval,
-            range = range
-        );
-        YResponse::from_json(self.send_request(&url)?)
-    }
+    let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
-    pub fn get_quote_history_interval(
-        &self,
-        ticker: &str,
-        start: OffsetDateTime,
-        end: OffsetDateTime,
-        interval: &str,
-    ) -> Result<YResponse, YahooError> {
-        let url = format!(
-            YCHART_PERIOD_QUERY!(),
-            url = self.url,
-            symbol = ticker,
-            start = start.unix_timestamp(),
-            end = end.unix_timestamp(),
-            interval = interval,
-        );
-        YResponse::from_json(self.send_request(&url)?)
-    }
+    let max_retries = 1;
+    for i in 0..=max_retries {
+      result = Ok(
+        self
+          .create_client(Some(cookie_provider.clone()))?
+          .get(url.clone().unwrap())
+          .send()?
+          .json()?,
+      );
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
-    pub fn get_quote_history_interval_prepost(
-        &self,
-        ticker: &str,
-        start: OffsetDateTime,
-        end: OffsetDateTime,
-        interval: &str,
-        prepost: bool,
-    ) -> Result<YResponse, YahooError> {
-        let url = format!(
-            YCHART_PERIOD_QUERY_PRE_POST!(),
-            url = self.url,
-            symbol = ticker,
-            start = start.unix_timestamp(),
-            end = end.unix_timestamp(),
-            interval = interval,
-            prepost = prepost,
-        );
-        YResponse::from_json(self.send_request(&url)?)
-    }
-
-    /// Retrieve the quote history for the given ticker for a given period and ticker interval and optionally before and after regular trading hours
-    pub fn get_quote_period_interval(
-        &self,
-        ticker: &str,
-        period: &str,
-        interval: &str,
-        prepost: bool,
-    ) -> Result<YResponse, YahooError> {
-        let url = format!(
-            YCHART_PERIOD_INTERVAL_QUERY!(),
-            url = self.url,
-            symbol = ticker,
-            period = period,
-            interval = interval,
-            prepost = prepost,
-        );
-        YResponse::from_json(self.send_request(&url)?)
-    }
-
-    /// Retrieve the list of quotes found searching a given name
-    pub fn search_ticker_opt(&self, name: &str) -> Result<YSearchResultOpt, YahooError> {
-        let url = format!(YTICKER_QUERY!(), url = self.search_url, name = name);
-        YSearchResultOpt::from_json(self.send_request(&url)?)
-    }
-
-    /// Retrieve the list of quotes found searching a given name
-    pub fn search_ticker(&self, name: &str) -> Result<YSearchResult, YahooError> {
-        let result = self.search_ticker_opt(name)?;
-        Ok(YSearchResult::from_opt(&result))
-    }
-
-    /// Get list for options for a given name
-    pub fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
-        let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
-        let resp = self.client.get(url).send()?;
-        let resp = resp.json::<YOptionChain>()?;
-
-        Ok(resp)
-    }
-
-    // Get symbol metadata
-    pub fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
-        if let None = &self.crumb {
-            self.crumb = Some(self.get_crumb()?);
-        }
-        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-        let url = reqwest::Url::parse(
-            &(format!(
-                YQUOTE_SUMMARY_QUERY!(),
-                symbol = symbol,
-                crumb = self.crumb.as_ref().unwrap()
-            )),
-        );
-
-        cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
-
-        let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
-
-        let max_retries = 1;
-        for i in 0..=max_retries {
-            result = Ok(self
-                .create_client(Some(cookie_provider.clone()))?
-                .get(url.clone().unwrap())
-                .send()?
-                .json()?);
-
-            if let Ok(result) = &result {
-                if let Some(finance) = &result.finance {
-                    if let Some(error) = &finance.error {
-                        if let Some(description) = &error.description {
-                            if description.contains("Invalid Crumb") {
-                                self.crumb = Some(self.get_crumb()?);
-                                if i == max_retries {
-                                    return Err(YahooError::InvalidCrumb);
-                                }
-                            }
-                        }
-                        if let Some(code) = &error.code {
-                            if code.contains("Unauthorized") {
-                                println!("Unauthorized {:?}", i);
-                                self.crumb = Some(self.get_crumb()?);
-                                if i == max_retries {
-                                    return Err(YahooError::Unauthorized);
-                                }
-                            }
-                        }
-                    }
+      if let Ok(result) = &result {
+        if let Some(finance) = &result.finance {
+          if let Some(error) = &finance.error {
+            if let Some(description) = &error.description {
+              if description.contains("Invalid Crumb") {
+                self.crumb = Some(self.get_crumb()?);
+                if i == max_retries {
+                  return Err(YahooError::InvalidCrumb);
                 }
+              }
             }
-        }
-
-        // Ok(result)
-        result
-    }
-
-    fn get_crumb(&mut self) -> Result<String, YahooError> {
-        if let None = &self.cookie {
-            self.cookie = Some(self.get_cookie()?);
-        }
-
-        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-        cookie_provider.add_cookie_str(
-            &self.cookie.clone().unwrap(),
-            &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap(),
-        );
-
-        let mut result = Err(YahooError::NoResponse);
-
-        let max_retries = 1;
-        for i in 0..=max_retries {
-            result = Ok(self
-                .create_client(Some(cookie_provider.clone()))?
-                .get(Y_GET_CRUMB_URL)
-                .send()?
-                .text()?);
-
-            if let Ok(result) = &result {
-                if result.contains("Invalid Cookie") {
-                    self.cookie = Some(self.get_cookie()?);
-                    if i == max_retries {
-                        return Err(YahooError::InvalidCookie);
-                    }
+            if let Some(code) = &error.code {
+              if code.contains("Unauthorized") {
+                println!("Unauthorized {:?}", i);
+                self.crumb = Some(self.get_crumb()?);
+                if i == max_retries {
+                  return Err(YahooError::Unauthorized);
                 }
+              }
             }
+          }
         }
-
-        // Ok(result)
-        result
+      }
     }
 
-    fn get_cookie(&mut self) -> Result<String, YahooError> {
-        println!("get_cookie()");
+    // Ok(result)
+    result
+  }
 
-        Ok(self
-            .client
-            .get(Y_GET_COOKIE_URL)
-            .send()?
-            .headers()
-            .get(Y_COOKIE_REQUEST_HEADER)
-            .ok_or(YahooError::NoCookies)?
-            .to_str()
-            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
-            .to_string())
+  fn get_crumb(&mut self) -> Result<String, YahooError> {
+    if let None = &self.cookie {
+      self.cookie = Some(self.get_cookie()?);
     }
 
-    fn create_client(
-        &mut self,
-        cookie_provider: Option<Arc<reqwest::cookie::Jar>>,
-    ) -> Result<Client, reqwest::Error> {
-        let mut client_builder = Client::builder();
+    let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+    cookie_provider.add_cookie_str(
+      &self.cookie.clone().unwrap(),
+      &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap(),
+    );
 
-        if let Some(cookie_provider) = cookie_provider {
-            client_builder = client_builder.cookie_provider(cookie_provider);
-        }
-        if let Some(timeout) = &self.timeout {
-            client_builder = client_builder.timeout(timeout.clone());
-        }
-        if let Some(user_agent) = &self.user_agent {
-            client_builder = client_builder.user_agent(user_agent.clone());
-        }
-        if let Some(proxy) = &self.proxy {
-            client_builder = client_builder.proxy(proxy.clone());
-        }
+    let mut result = Err(YahooError::NoResponse);
 
-        client_builder.build()
+    let max_retries = 1;
+    for i in 0..=max_retries {
+      result =
+        Ok(self.create_client(Some(cookie_provider.clone()))?.get(Y_GET_CRUMB_URL).send()?.text()?);
+
+      if let Ok(result) = &result {
+        if result.contains("Invalid Cookie") {
+          self.cookie = Some(self.get_cookie()?);
+          if i == max_retries {
+            return Err(YahooError::InvalidCookie);
+          }
+        }
+      }
     }
 
-    /// Send request to yahoo! finance server and transform response to JSON value
-    fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
-        let resp = self.client.get(url).send()?;
+    // Ok(result)
+    result
+  }
 
-        match resp.status() {
-            StatusCode::OK => Ok(resp.json()?),
-            status => Err(YahooError::FetchFailed(format!("{}", status))),
-        }
+  fn get_cookie(&mut self) -> Result<String, YahooError> {
+    println!("get_cookie()");
+
+    Ok(
+      self
+        .client
+        .get(Y_GET_COOKIE_URL)
+        .send()?
+        .headers()
+        .get(Y_COOKIE_REQUEST_HEADER)
+        .ok_or(YahooError::NoCookies)?
+        .to_str()
+        .map_err(|_| YahooError::InvisibleAsciiInCookies)?
+        .to_string(),
+    )
+  }
+
+  fn create_client(
+    &mut self,
+    cookie_provider: Option<Arc<reqwest::cookie::Jar>>,
+  ) -> Result<Client, reqwest::Error> {
+    let mut client_builder = Client::builder();
+
+    if let Some(cookie_provider) = cookie_provider {
+      client_builder = client_builder.cookie_provider(cookie_provider);
     }
+    if let Some(timeout) = &self.timeout {
+      client_builder = client_builder.timeout(timeout.clone());
+    }
+    if let Some(user_agent) = &self.user_agent {
+      client_builder = client_builder.user_agent(user_agent.clone());
+    }
+    if let Some(proxy) = &self.proxy {
+      client_builder = client_builder.proxy(proxy.clone());
+    }
+
+    client_builder.build()
+  }
+
+  /// Send request to yahoo! finance server and transform response to JSON value
+  fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
+    let resp = self.client.get(url).send()?;
+
+    match resp.status() {
+      StatusCode::OK => Ok(resp.json()?),
+      status => Err(YahooError::FetchFailed(format!("{}", status))),
+    }
+  }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use time::macros::datetime;
+  use super::*;
+  use time::macros::datetime;
 
-    #[test]
-    fn test_get_single_quote() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_latest_quotes("HNL.DE", "1d").unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-        let _ = response.last_quote().unwrap();
+  #[test]
+  fn test_get_single_quote() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_latest_quotes("HNL.DE", "1d").unwrap();
+    assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
+    assert_eq!(&response.chart.result[0].meta.range, "1mo");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+    let _ = response.last_quote().unwrap();
+  }
+
+  #[test]
+  fn test_strange_api_responses() {
+    let provider = YahooConnector::new().unwrap();
+    let start = datetime!(2019-07-03 0:00:00.00 UTC);
+    let end = datetime!(2020-07-04 23:59:59.99 UTC);
+    let resp = provider.get_quote_history("IBM", start, end).unwrap();
+
+    assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
+    assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
+    assert_eq!(&resp.chart.result[0].meta.first_trade_date, &Some(-252322200));
+
+    let _ = resp.last_quote().unwrap();
+  }
+
+  #[test]
+  #[should_panic(expected = "DeserializeFailed")]
+  fn test_api_responses_missing_fields() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
+
+    assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
+    assert_eq!(&response.chart.result[0].meta.range, "1d");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
+    let _ = response.last_quote().unwrap();
+  }
+
+  #[test]
+  fn test_get_quote_history() {
+    let provider = YahooConnector::new().unwrap();
+
+    let start = datetime!(2020-01-01 0:00:00.00 UTC);
+    let end = datetime!(2020-01-31 23:59:59.99 UTC);
+
+    let resp = provider.get_quote_history("AAPL", start, end);
+    assert!(resp.is_ok());
+    let resp = resp.unwrap();
+    assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+    let quotes = resp.quotes().unwrap();
+    assert_eq!(quotes.len(), 21);
+  }
+
+  #[test]
+  fn test_get_quote_range() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+    assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
+    assert_eq!(&response.chart.result[0].meta.range, "1mo");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+    let _ = response.last_quote().unwrap();
+  }
+
+  #[test]
+  fn test_get_metadata() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
+    let metadata = response.metadata().unwrap();
+    assert_eq!(metadata.symbol, "HNL.DE");
+  }
+
+  #[test]
+  fn test_get() {
+    let provider = YahooConnector::new().unwrap();
+
+    let start = datetime!(2019-01-01 0:00:00.00 UTC);
+    let end = datetime!(2020-01-31 23:59:59.99 UTC);
+
+    let response = provider.get_quote_history_interval("AAPL", start, end, "1mo").unwrap();
+    assert_eq!(&response.chart.result[0].timestamp.len(), &13);
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
+    let quotes = response.quotes().unwrap();
+    assert_eq!(quotes.len(), 13usize);
+  }
+
+  #[test]
+  fn test_large_volume() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
+    let quotes = response.quotes().unwrap();
+    assert!(quotes.len() > 0usize);
+  }
+
+  #[test]
+  fn test_search_ticker() {
+    let provider = YahooConnector::new().unwrap();
+    let resp = provider.search_ticker("Apple").unwrap();
+
+    assert_eq!(resp.count, 15);
+    let mut apple_found = false;
+    for item in resp.quotes {
+      if item.exchange == "NMS" && item.symbol == "AAPL" && item.short_name == "Apple Inc." {
+        apple_found = true;
+        break;
+      }
     }
+    assert!(apple_found)
+  }
 
-    #[test]
-    fn test_strange_api_responses() {
-        let provider = YahooConnector::new().unwrap();
-        let start = datetime!(2019-07-03 0:00:00.00 UTC);
-        let end = datetime!(2020-07-04 23:59:59.99 UTC);
-        let resp = provider.get_quote_history("IBM", start, end).unwrap();
+  #[test]
+  fn test_mutual_fund_history() {
+    let provider = YahooConnector::new().unwrap();
 
-        assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
-        assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
-        assert_eq!(
-            &resp.chart.result[0].meta.first_trade_date,
-            &Some(-252322200)
-        );
+    let start = datetime!(2020-01-01 0:00:00.00 UTC);
+    let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
-        let _ = resp.last_quote().unwrap();
+    let resp = provider.get_quote_history("VTSAX", start, end);
+    if resp.is_ok() {
+      let resp = resp.unwrap();
+      assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+      let quotes = resp.quotes().unwrap();
+      assert_eq!(quotes.len(), 21);
     }
+  }
 
-    #[test]
-    #[should_panic(expected = "DeserializeFailed")]
-    fn test_api_responses_missing_fields() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
+  #[test]
+  fn test_mutual_fund_latest() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_latest_quotes("VTSAX", "1d").unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
-        assert_eq!(&response.chart.result[0].meta.range, "1d");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
-        let _ = response.last_quote().unwrap();
-    }
+    assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
+    assert_eq!(&response.chart.result[0].meta.range, "1mo");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+    let _ = response.last_quote().unwrap();
+  }
 
-    #[test]
-    fn test_get_quote_history() {
-        let provider = YahooConnector::new().unwrap();
+  #[test]
+  fn test_mutual_fund_range() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
+    assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
+    assert_eq!(&response.chart.result[0].meta.range, "1mo");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+  }
 
-        let start = datetime!(2020-01-01 0:00:00.00 UTC);
-        let end = datetime!(2020-01-31 23:59:59.99 UTC);
+  #[test]
+  fn test_mutual_fund_capital_gains() {
+    let provider = YahooConnector::new().unwrap();
+    let response = provider.get_quote_range("AMAGX", "1d", "5y").unwrap();
 
-        let resp = provider.get_quote_history("AAPL", start, end);
-        assert!(resp.is_ok());
-        let resp = resp.unwrap();
-        assert_eq!(resp.chart.result[0].timestamp.len(), 21);
-        let quotes = resp.quotes().unwrap();
-        assert_eq!(quotes.len(), 21);
-    }
+    assert_eq!(&response.chart.result[0].meta.symbol, "AMAGX");
+    assert_eq!(&response.chart.result[0].meta.range, "5y");
+    assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+    let capital_gains = response.capital_gains().unwrap();
+    assert!(capital_gains.len() > 0usize);
+  }
 
-    #[test]
-    fn test_get_quote_range() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-        let _ = response.last_quote().unwrap();
-    }
+  #[test]
+  fn search_options() {
+    let provider = YahooConnector::new().unwrap();
+    let resp = provider.search_options("AAPL");
 
-    #[test]
-    fn test_get_metadata() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_quote_range("HNL.DE", "1d", "1mo").unwrap();
-        let metadata = response.metadata().unwrap();
-        assert_eq!(metadata.symbol, "HNL.DE");
-    }
+    assert!(resp.is_ok());
+  }
 
-    #[test]
-    fn test_get() {
-        let provider = YahooConnector::new().unwrap();
+  #[test]
+  fn test_get_ticker_info() {
+    let mut provider = YahooConnector::new().unwrap();
 
-        let start = datetime!(2019-01-01 0:00:00.00 UTC);
-        let end = datetime!(2020-01-31 23:59:59.99 UTC);
+    let result = provider.get_ticker_info("AAPL");
 
-        let response = provider
-            .get_quote_history_interval("AAPL", start, end, "1mo")
-            .unwrap();
-        assert_eq!(&response.chart.result[0].timestamp.len(), &13);
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
-        let quotes = response.quotes().unwrap();
-        assert_eq!(quotes.len(), 13usize);
-    }
+    let quote_summary = result.unwrap().quote_summary.unwrap();
+    assert!(
+      "Cupertino" == quote_summary.result[0].asset_profile.as_ref().unwrap().city.as_ref().unwrap()
+    );
+    // Testing it retrieved info, hard coded but shouldn't change anytime soon
+  }
 
-    #[test]
-    fn test_large_volume() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
-        let quotes = response.quotes().unwrap();
-        assert!(quotes.len() > 0usize);
-    }
+  #[test]
+  fn test_get_crumb() {
+    let mut provider = YahooConnector::new().unwrap();
+    let crumb = provider.get_crumb().unwrap();
 
-    #[test]
-    fn test_search_ticker() {
-        let provider = YahooConnector::new().unwrap();
-        let resp = provider.search_ticker("Apple").unwrap();
+    assert!(crumb.len() > 5);
+    assert!(crumb.len() < 16);
+  }
 
-        assert_eq!(resp.count, 15);
-        let mut apple_found = false;
-        for item in resp.quotes {
-            if item.exchange == "NMS" && item.symbol == "AAPL" && item.short_name == "Apple Inc." {
-                apple_found = true;
-                break;
-            }
-        }
-        assert!(apple_found)
-    }
+  #[test]
+  fn test_get_cookie() {
+    let mut provider = YahooConnector::new().unwrap();
+    let cookie = provider.get_cookie().unwrap();
 
-    #[test]
-    fn test_mutual_fund_history() {
-        let provider = YahooConnector::new().unwrap();
-
-        let start = datetime!(2020-01-01 0:00:00.00 UTC);
-        let end = datetime!(2020-01-31 23:59:59.99 UTC);
-
-        let resp = provider.get_quote_history("VTSAX", start, end);
-        if resp.is_ok() {
-            let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
-            let quotes = resp.quotes().unwrap();
-            assert_eq!(quotes.len(), 21);
-        }
-    }
-
-    #[test]
-    fn test_mutual_fund_latest() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_latest_quotes("VTSAX", "1d").unwrap();
-
-        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-        let _ = response.last_quote().unwrap();
-    }
-
-    #[test]
-    fn test_mutual_fund_range() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-    }
-
-    #[test]
-    fn test_mutual_fund_capital_gains() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.get_quote_range("AMAGX", "1d", "5y").unwrap();
-
-        assert_eq!(&response.chart.result[0].meta.symbol, "AMAGX");
-        assert_eq!(&response.chart.result[0].meta.range, "5y");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
-        let capital_gains = response.capital_gains().unwrap();
-        assert!(capital_gains.len() > 0usize);
-    }
-
-    #[test]
-    fn search_options() {
-        let provider = YahooConnector::new().unwrap();
-        let resp = provider.search_options("AAPL");
-
-        assert!(resp.is_ok());
-    }
-
-    #[test]
-    fn test_get_ticker_info() {
-        let mut provider = YahooConnector::new().unwrap();
-
-        let result = provider.get_ticker_info("AAPL");
-
-        let quote_summary = result.unwrap().quote_summary.unwrap();
-        assert!("Cupertino" == quote_summary.result[0].asset_profile.city);
-        // Testing it retrieved info, hard coded but shouldn't change anytime soon
-    }
-
-    #[test]
-    fn test_get_crumb() {
-        let mut provider = YahooConnector::new().unwrap();
-        let crumb = provider.get_crumb().unwrap();
-
-        assert!(crumb.len() > 5);
-        assert!(crumb.len() < 16);
-    }
-
-    #[test]
-    fn test_get_cookie() {
-        let mut provider = YahooConnector::new().unwrap();
-        let cookie = provider.get_cookie().unwrap();
-
-        assert!(cookie.len() > 30);
-        assert!(
-            cookie.contains("Expires")
-                || cookie.contains("Max-Age")
-                || cookie.contains("Domain")
-                || cookie.contains("Path")
-                || cookie.contains("Secure")
-        );
-    }
+    assert!(cookie.len() > 30);
+    assert!(
+      cookie.contains("Expires")
+        || cookie.contains("Max-Age")
+        || cookie.contains("Domain")
+        || cookie.contains("Path")
+        || cookie.contains("Secure")
+    );
+  }
 }
