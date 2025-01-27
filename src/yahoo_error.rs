@@ -16,4 +16,16 @@ pub enum YahooError {
     DataInconsistency,
     #[error("construcing yahoo! finance client failed")]
     BuilderFailed,
+    #[error("No cookies in response headers")]
+    NoCookies,
+    #[error("Invisible characters in cookies")]
+    InvisibleAsciiInCookies,
+    #[error("No response")]
+    NoResponse,
+    #[error("Invalid cookie")]
+    InvalidCookie,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Invalid crumb")]
+    InvalidCrumb,
 }
