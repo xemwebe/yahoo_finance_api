@@ -1,6 +1,7 @@
 use std::time::{Duration, UNIX_EPOCH};
 
-use time::{macros::datetime, OffsetDateTime};
+use time::macros::datetime;
+use time::OffsetDateTime;
 
 use yahoo_finance_api as yahoo;
 
