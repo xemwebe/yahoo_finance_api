@@ -11,8 +11,8 @@
 //! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
 #![cfg_attr(
-  not(feature = "blocking"),
-  doc = "
+    not(feature = "blocking"),
+    doc = "
 # Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
@@ -90,8 +90,8 @@ returning `None` if the field found missing in the response.
 )]
 //!
 #![cfg_attr(
-  feature = "blocking",
-  doc = "
+    feature = "blocking",
+    doc = "
 # Get the latest available quote (with blocking feature enabled):
 ```rust
 use yahoo_finance_api as yahoo;
@@ -177,14 +177,14 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-  AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
-  ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType, Split,
-  SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
-  YSummaryData,
+    AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
+    ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType,
+    Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+    YSummaryData,
 };
 pub use search_result::{
-  YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
-  YQuote, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt,
+    YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
+    YQuote, YQuoteItem, YQuoteItemOpt, YSearchResult, YSearchResultOpt,
 };
 pub use yahoo_error::YahooError;
 
@@ -219,9 +219,9 @@ macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
   };
 }
 macro_rules! YTICKER_QUERY {
-  () => {
-    "{url}?q={name}"
-  };
+    () => {
+        "{url}?q={name}"
+    };
 }
 macro_rules! YQUOTE_SUMMARY_QUERY {
     () => {
@@ -231,97 +231,100 @@ macro_rules! YQUOTE_SUMMARY_QUERY {
 
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
-  client:     Client,
-  url:        &'static str,
-  search_url: &'static str,
-  timeout:    Option<Duration>,
-  user_agent: Option<String>,
-  proxy:      Option<Proxy>,
-  cookie:     Option<String>,
-  crumb:      Option<String>,
+    client: Client,
+    url: &'static str,
+    search_url: &'static str,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
+    cookie: Option<String>,
+    crumb: Option<String>,
 }
 
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
-  inner:      ClientBuilder,
-  timeout:    Option<Duration>,
-  user_agent: Option<String>,
-  proxy:      Option<Proxy>,
+    inner: ClientBuilder,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
 }
 
 impl YahooConnector {
-  /// Constructor for a new instance of the yahoo connector.
-  pub fn new() -> Result<YahooConnector, YahooError> {
-    Self::builder().build()
-  }
-
-  pub fn builder() -> YahooConnectorBuilder {
-    YahooConnectorBuilder {
-      inner: Client::builder(),
-      user_agent: Some(USER_AGENT.to_string()),
-      ..Default::default()
+    /// Constructor for a new instance of the yahoo connector.
+    pub fn new() -> Result<YahooConnector, YahooError> {
+        Self::builder().build()
     }
-  }
+
+    pub fn builder() -> YahooConnectorBuilder {
+        YahooConnectorBuilder {
+            inner: Client::builder(),
+            user_agent: Some(USER_AGENT.to_string()),
+            ..Default::default()
+        }
+    }
 }
 
 impl Default for YahooConnector {
-  fn default() -> Self {
-    YahooConnector {
-      client:     Client::default(),
-      url:        YCHART_URL,
-      search_url: YSEARCH_URL,
-      timeout:    None,
-      user_agent: Some(USER_AGENT.to_string()),
-      proxy:      None,
-      cookie:     None,
-      crumb:      None,
+    fn default() -> Self {
+        YahooConnector {
+            client: Client::default(),
+            url: YCHART_URL,
+            search_url: YSEARCH_URL,
+            timeout: None,
+            user_agent: Some(USER_AGENT.to_string()),
+            proxy: None,
+            cookie: None,
+            crumb: None,
+        }
     }
-  }
 }
 
 impl YahooConnectorBuilder {
-  pub fn new() -> Self {
-    YahooConnector::builder()
-  }
-
-  pub fn timeout(mut self, timeout: Duration) -> Self {
-    self.timeout = Some(timeout);
-    self
-  }
-
-  pub fn user_agent(mut self, user_agent: &str) -> Self {
-    self.user_agent = Some(user_agent.to_string());
-    self
-  }
-
-  pub fn proxy(mut self, proxy: Proxy) -> Self {
-    self.proxy = Some(proxy);
-    self
-  }
-
-  pub fn build(mut self) -> Result<YahooConnector, YahooError> {
-    if let Some(timeout) = &self.timeout {
-      self.inner = self.inner.timeout(timeout.clone());
-    }
-    if let Some(user_agent) = &self.user_agent {
-      self.inner = self.inner.user_agent(user_agent.clone());
-    }
-    if let Some(proxy) = &self.proxy {
-      self.inner = self.inner.proxy(proxy.clone());
+    pub fn new() -> Self {
+        YahooConnector::builder()
     }
 
-    Ok(YahooConnector {
-      client: self.inner.build()?,
-      timeout: self.timeout,
-      user_agent: self.user_agent,
-      proxy: self.proxy,
-      ..Default::default()
-    })
-  }
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
 
-  pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
-    Ok(YahooConnector { client, ..Default::default() })
-  }
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.user_agent = Some(user_agent.to_string());
+        self
+    }
+
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+
+    pub fn build(mut self) -> Result<YahooConnector, YahooError> {
+        if let Some(timeout) = &self.timeout {
+            self.inner = self.inner.timeout(timeout.clone());
+        }
+        if let Some(user_agent) = &self.user_agent {
+            self.inner = self.inner.user_agent(user_agent.clone());
+        }
+        if let Some(proxy) = &self.proxy {
+            self.inner = self.inner.proxy(proxy.clone());
+        }
+
+        Ok(YahooConnector {
+            client: self.inner.build()?,
+            timeout: self.timeout,
+            user_agent: self.user_agent,
+            proxy: self.proxy,
+            ..Default::default()
+        })
+    }
+
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
+    }
 }
 
 #[cfg(not(feature = "blocking"))]
