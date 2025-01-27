@@ -471,6 +471,7 @@ mod tests {
         let mut provider = YahooConnector::new().unwrap();
         let crumb = provider.get_crumb().await.unwrap();
 
+<<<<<<< HEAD
         assert!(crumb.len() > 5);
         assert!(crumb.len() < 16);
     }
@@ -488,5 +489,20 @@ mod tests {
                 || cookie.contains("Path")
                 || cookie.contains("Secure")
         );
+=======
+        assert!(result.is_ok());
+        let quote_summary = result.unwrap().quote_summary;
+        assert!(
+            "Cupertino"
+                == quote_summary.result[0]
+                    .asset_profile
+                    .as_ref()
+                    .unwrap()
+                    .city
+                    .as_ref()
+                    .unwrap()
+        );
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
+>>>>>>> improved_get_ticker_info
     }
 }

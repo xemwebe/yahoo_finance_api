@@ -176,8 +176,15 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
+<<<<<<< HEAD
     AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split,
     TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+=======
+    AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
+    ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType,
+    Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+    YSummaryData,
+>>>>>>> improved_get_ticker_info
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
@@ -254,9 +261,13 @@ impl YahooConnector {
 
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
+<<<<<<< HEAD
             inner: Client::builder(),
             user_agent: Some(USER_AGENT.to_string()),
             ..Default::default()
+=======
+            inner: Client::builder().user_agent(USER_AGENT),
+>>>>>>> improved_get_ticker_info
         }
     }
 }
@@ -279,6 +290,7 @@ impl Default for YahooConnector {
 impl YahooConnectorBuilder {
     pub fn new() -> Self {
         YahooConnector::builder()
+<<<<<<< HEAD
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
@@ -288,10 +300,22 @@ impl YahooConnectorBuilder {
 
     pub fn user_agent(mut self, user_agent: &str) -> Self {
         self.user_agent = Some(user_agent.to_string());
+=======
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.inner = self.inner.timeout(timeout);
+        self
+    }
+
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.inner = self.inner.user_agent(user_agent);
+>>>>>>> improved_get_ticker_info
         self
     }
 
     pub fn proxy(mut self, proxy: Proxy) -> Self {
+<<<<<<< HEAD
         self.proxy = Some(proxy);
         self
     }
@@ -306,12 +330,21 @@ impl YahooConnectorBuilder {
         if let Some(proxy) = &self.proxy {
             self.inner = self.inner.proxy(proxy.clone());
         }
+=======
+        self.inner = self.inner.proxy(proxy);
+        self
+    }
+>>>>>>> improved_get_ticker_info
 
+    pub fn build(self) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client: self.inner.build()?,
+<<<<<<< HEAD
             timeout: self.timeout,
             user_agent: self.user_agent,
             proxy: self.proxy,
+=======
+>>>>>>> improved_get_ticker_info
             ..Default::default()
         })
     }
