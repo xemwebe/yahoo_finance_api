@@ -60,6 +60,27 @@ impl YahooConnector {
         YResponse::from_json(self.send_request(&url).await?)
     }
 
+    /// Retrieve the quote history for the given ticker form date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
+    pub async fn get_quote_history_interval_prepost(
+        &self,
+        ticker: &str,
+        start: OffsetDateTime,
+        end: OffsetDateTime,
+        interval: &str,
+        prepost: bool,
+    ) -> Result<YResponse, YahooError> {
+        let url = format!(
+            YCHART_PERIOD_QUERY_PRE_POST!(),
+            url = self.url,
+            symbol = ticker,
+            start = start.unix_timestamp(),
+            end = end.unix_timestamp(),
+            interval = interval,
+            prepost = prepost,
+        );
+        YResponse::from_json(self.send_request(&url).await?)
+    }
+
     /// Retrieve the quote history for the given ticker for a given period and ticker interval and optionally before and after regular trading hours
     pub async fn get_quote_period_interval(
         &self,
@@ -355,6 +376,16 @@ mod tests {
 
         assert!(result.is_ok());
         let quote_summary = result.unwrap().quote_summary;
-        assert!("Cupertino" == quote_summary.result[0].asset_profile.city); // Testing it retrieved info, hard coded but shouldn't change anytime soon
+        assert!(
+            "Cupertino"
+                == quote_summary.result[0]
+                    .asset_profile
+                    .as_ref()
+                    .unwrap()
+                    .city
+                    .as_ref()
+                    .unwrap()
+        );
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 }

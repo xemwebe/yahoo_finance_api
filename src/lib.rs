@@ -164,9 +164,9 @@ use time::OffsetDateTime;
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
-use reqwest::StatusCode;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
+use reqwest::{Proxy, StatusCode};
 
 // re-export time crate
 pub use quotes::decimal::Decimal;
@@ -176,8 +176,10 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, CapitalGain, Dividend, PeriodInfo, Quote, QuoteBlock, QuoteList, Split,
-    TradingPeriods, YChart, YMetaData, YQuoteBlock, YResponse,
+    AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
+    ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType,
+    Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+    YSummaryData,
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
@@ -198,6 +200,11 @@ const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KH
 macro_rules! YCHART_PERIOD_QUERY {
     () => {
         "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains"
+    };
+}
+macro_rules! YCHART_PERIOD_QUERY_PRE_POST {
+    () => {
+        "{url}/{symbol}?symbol={symbol}&period1={start}&period2={end}&interval={interval}&events=div|split|capitalGains&includePrePost={prepost}"
     };
 }
 macro_rules! YCHART_RANGE_QUERY {
@@ -241,7 +248,7 @@ impl YahooConnector {
 
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: Client::builder(),
+            inner: Client::builder().user_agent(USER_AGENT),
         }
     }
 }
@@ -257,24 +264,37 @@ impl Default for YahooConnector {
 }
 
 impl YahooConnectorBuilder {
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
-        self.build_with_agent(USER_AGENT)
-    }
-
-    pub fn build_with_agent(self, user_agent: &str) -> Result<YahooConnector, YahooError> {
-        let client = Client::builder().user_agent(user_agent).build()?;
-
-        Ok(YahooConnector {
-            client,
-            url: YCHART_URL,
-            search_url: YSEARCH_URL,
-        })
+    pub fn new() -> Self {
+        YahooConnector::builder()
     }
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.inner = self.inner.timeout(timeout);
-
         self
+    }
+
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.inner = self.inner.user_agent(user_agent);
+        self
+    }
+
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.inner = self.inner.proxy(proxy);
+        self
+    }
+
+    pub fn build(self) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client: self.inner.build()?,
+            ..Default::default()
+        })
+    }
+
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
     }
 }
 
