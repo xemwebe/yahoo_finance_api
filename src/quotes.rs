@@ -391,7 +391,20 @@ pub struct CapitalGain {
 #[serde(rename_all = "camelCase")]
 pub struct YQuoteSummary {
     #[serde(rename = "quoteSummary")]
-    pub quote_summary: ExtendedQuoteSummary,
+    pub quote_summary: Option<ExtendedQuoteSummary>,
+    pub finance: Option<YFinance>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YFinance {
+    pub result: Option<serde_json::Value>,
+    pub error: Option<YErrorMessage>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YErrorMessage {
+    pub code: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

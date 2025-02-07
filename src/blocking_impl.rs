@@ -1,5 +1,3 @@
-use search_result::YOptionChain;
-
 use super::*;
 
 impl YahooConnector {
@@ -116,46 +114,130 @@ impl YahooConnector {
     }
 
     // Get symbol metadata
-    pub fn get_ticker_info(symbol: &str) -> Result<YQuoteSummary, YahooError> {
-        let get_cookie_resp = reqwest::blocking::get(Y_GET_COOKIE_URL).unwrap();
-        let cookie = get_cookie_resp
+    pub fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
+        if let None = &self.crumb {
+            self.crumb = Some(self.get_crumb()?);
+        }
+        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+        let url = reqwest::Url::parse(
+            &(format!(
+                YQUOTE_SUMMARY_QUERY!(),
+                symbol = symbol,
+                crumb = self.crumb.as_ref().unwrap()
+            )),
+        );
+
+        cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
+
+        let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
+
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))?
+                .get(url.clone().unwrap())
+                .send()?
+                .json()?);
+
+            if let Ok(result) = &result {
+                if let Some(finance) = &result.finance {
+                    if let Some(error) = &finance.error {
+                        if let Some(description) = &error.description {
+                            if description.contains("Invalid Crumb") {
+                                self.crumb = Some(self.get_crumb()?);
+                                if i == max_retries {
+                                    return Err(YahooError::InvalidCrumb);
+                                }
+                            }
+                        }
+                        if let Some(code) = &error.code {
+                            if code.contains("Unauthorized") {
+                                println!("Unauthorized {:?}", i);
+                                self.crumb = Some(self.get_crumb()?);
+                                if i == max_retries {
+                                    return Err(YahooError::Unauthorized);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
+    }
+
+    fn get_crumb(&mut self) -> Result<String, YahooError> {
+        if let None = &self.cookie {
+            self.cookie = Some(self.get_cookie()?);
+        }
+
+        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+        cookie_provider.add_cookie_str(
+            &self.cookie.clone().unwrap(),
+            &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap(),
+        );
+
+        let mut result = Err(YahooError::NoResponse);
+
+        let max_retries = 1;
+        for i in 0..=max_retries {
+            result = Ok(self
+                .create_client(Some(cookie_provider.clone()))?
+                .get(Y_GET_CRUMB_URL)
+                .send()?
+                .text()?);
+
+            if let Ok(result) = &result {
+                if result.contains("Invalid Cookie") {
+                    self.cookie = Some(self.get_cookie()?);
+                    if i == max_retries {
+                        return Err(YahooError::InvalidCookie);
+                    }
+                }
+            }
+        }
+
+        // Ok(result)
+        result
+    }
+
+    fn get_cookie(&mut self) -> Result<String, YahooError> {
+        println!("get_cookie()");
+
+        Ok(self
+            .client
+            .get(Y_GET_COOKIE_URL)
+            .send()?
             .headers()
             .get(Y_COOKIE_REQUEST_HEADER)
-            .unwrap()
+            .ok_or(YahooError::NoCookies)?
             .to_str()
-            .unwrap();
-        let jar_for_cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
-        jar_for_cookie.add_cookie_str(cookie, &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap());
-        let intermediate_client_for_cookie = Client::builder()
-            .user_agent(USER_AGENT)
-            .cookie_provider(jar_for_cookie)
-            .build()
-            .unwrap();
+            .map_err(|_| YahooError::InvisibleAsciiInCookies)?
+            .to_string())
+    }
 
-        let crumb = intermediate_client_for_cookie
-            .get(reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap())
-            .send()
-            .unwrap()
-            .text()
-            .unwrap();
+    fn create_client(
+        &mut self,
+        cookie_provider: Option<Arc<reqwest::cookie::Jar>>,
+    ) -> Result<Client, reqwest::Error> {
+        let mut client_builder = Client::builder();
 
-        let jar_for_info = std::sync::Arc::new(reqwest::cookie::Jar::default());
-        let url_for_information = reqwest::Url::parse(
-            &(format!(YQUOTE_SUMMARY_QUERY!(), symbol = symbol, crumb = crumb)),
-        );
-        jar_for_info.add_cookie_str(cookie, &url_for_information.clone().unwrap());
+        if let Some(cookie_provider) = cookie_provider {
+            client_builder = client_builder.cookie_provider(cookie_provider);
+        }
+        if let Some(timeout) = &self.timeout {
+            client_builder = client_builder.timeout(timeout.clone());
+        }
+        if let Some(user_agent) = &self.user_agent {
+            client_builder = client_builder.user_agent(user_agent.clone());
+        }
+        if let Some(proxy) = &self.proxy {
+            client_builder = client_builder.proxy(proxy.clone());
+        }
 
-        let client_for_info = reqwest::blocking::Client::builder()
-            .user_agent(USER_AGENT)
-            .cookie_provider(jar_for_info)
-            .build()
-            .unwrap();
-        let resp = client_for_info
-            .get(url_for_information.unwrap())
-            .send()
-            .unwrap();
-        let result = resp.json().unwrap();
-        Ok(result)
+        client_builder.build()
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value
@@ -359,7 +441,6 @@ mod tests {
 
         assert!(result.is_ok());
         let quote_summary = result.unwrap().quote_summary;
-        // Testing it retrieved info, hard coded but shouldn't change anytime soon
         assert!(
             "Cupertino"
                 == quote_summary.result[0]
@@ -369,6 +450,30 @@ mod tests {
                     .city
                     .as_ref()
                     .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_get_crumb() {
+        let mut provider = YahooConnector::new().unwrap();
+        let crumb = provider.get_crumb().unwrap();
+
+        assert!(crumb.len() > 5);
+        assert!(crumb.len() < 16);
+    }
+
+    #[test]
+    fn test_get_cookie() {
+        let mut provider = YahooConnector::new().unwrap();
+        let cookie = provider.get_cookie().unwrap();
+
+        assert!(cookie.len() > 30);
+        assert!(
+            cookie.contains("Expires")
+                || cookie.contains("Max-Age")
+                || cookie.contains("Domain")
+                || cookie.contains("Path")
+                || cookie.contains("Secure")
         );
     }
 }

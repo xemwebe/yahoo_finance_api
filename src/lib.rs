@@ -159,6 +159,7 @@ fn main() {
 "
 )]
 
+use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
 
@@ -208,14 +209,14 @@ macro_rules! YCHART_PERIOD_QUERY_PRE_POST {
     };
 }
 macro_rules! YCHART_RANGE_QUERY {
-	() => {
-		"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
-	};
+  () => {
+    "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+  };
 }
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
-    () => {
-        "{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}"
-    };
+  () => {
+    "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
+  };
 }
 macro_rules! YTICKER_QUERY {
     () => {
@@ -233,11 +234,19 @@ pub struct YahooConnector {
     client: Client,
     url: &'static str,
     search_url: &'static str,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
+    cookie: Option<String>,
+    crumb: Option<String>,
 }
 
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,
+    timeout: Option<Duration>,
+    user_agent: Option<String>,
+    proxy: Option<Proxy>,
 }
 
 impl YahooConnector {
@@ -248,7 +257,9 @@ impl YahooConnector {
 
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
-            inner: Client::builder().user_agent(USER_AGENT),
+            inner: Client::builder(),
+            user_agent: Some(USER_AGENT.to_string()),
+            ..Default::default()
         }
     }
 }
@@ -259,6 +270,11 @@ impl Default for YahooConnector {
             client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
+            timeout: None,
+            user_agent: Some(USER_AGENT.to_string()),
+            proxy: None,
+            cookie: None,
+            crumb: None,
         }
     }
 }
@@ -268,9 +284,37 @@ impl YahooConnectorBuilder {
         YahooConnector::builder()
     }
 
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn user_agent(mut self, user_agent: &str) -> Self {
+        self.user_agent = Some(user_agent.to_string());
+        self
+    }
+
+    pub fn proxy(mut self, proxy: Proxy) -> Self {
+        self.proxy = Some(proxy);
+        self
+    }
+
+    pub fn build(mut self) -> Result<YahooConnector, YahooError> {
+        if let Some(timeout) = &self.timeout {
+            self.inner = self.inner.timeout(timeout.clone());
+        }
+        if let Some(user_agent) = &self.user_agent {
+            self.inner = self.inner.user_agent(user_agent.clone());
+        }
+        if let Some(proxy) = &self.proxy {
+            self.inner = self.inner.proxy(proxy.clone());
+        }
+
         Ok(YahooConnector {
             client: self.inner.build()?,
+            timeout: self.timeout,
+            user_agent: self.user_agent,
+            proxy: self.proxy,
             ..Default::default()
         })
     }
@@ -280,21 +324,6 @@ impl YahooConnectorBuilder {
             client,
             ..Default::default()
         })
-    }
-
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.inner = self.inner.timeout(timeout);
-        self
-    }
-
-    pub fn user_agent(mut self, user_agent: &str) -> Self {
-        self.inner = self.inner.user_agent(user_agent);
-        self
-    }
-
-    pub fn proxy(mut self, proxy: Proxy) -> Self {
-        self.inner = self.inner.proxy(proxy);
-        self
     }
 }
 
