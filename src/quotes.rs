@@ -390,6 +390,7 @@ pub struct CapitalGain {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuoteSummary {
+    #[serde(rename = "quoteSummary")]
     pub quote_summary: ExtendedQuoteSummary,
 }
 

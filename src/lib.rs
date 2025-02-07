@@ -208,13 +208,13 @@ macro_rules! YCHART_PERIOD_QUERY_PRE_POST {
     };
 }
 macro_rules! YCHART_RANGE_QUERY {
-    () => {
-        "{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
-    };
+	() => {
+		"{url}/{symbol}?symbol={symbol}&interval={interval}&range={range}&events=div|split|capitalGains"
+	};
 }
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
     () => {
-        "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
+        "{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}"
     };
 }
 macro_rules! YTICKER_QUERY {
@@ -268,6 +268,20 @@ impl YahooConnectorBuilder {
         YahooConnector::builder()
     }
 
+    pub fn build(self) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client: self.inner.build()?,
+            ..Default::default()
+        })
+    }
+
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
+        Ok(YahooConnector {
+            client,
+            ..Default::default()
+        })
+    }
+
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.inner = self.inner.timeout(timeout);
         self
@@ -281,20 +295,6 @@ impl YahooConnectorBuilder {
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.inner = self.inner.proxy(proxy);
         self
-    }
-
-    pub fn build(self) -> Result<YahooConnector, YahooError> {
-        Ok(YahooConnector {
-            client: self.inner.build()?,
-            ..Default::default()
-        })
-    }
-
-    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
-        Ok(YahooConnector {
-            client,
-            ..Default::default()
-        })
     }
 }
 

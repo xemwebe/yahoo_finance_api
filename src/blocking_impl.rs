@@ -79,7 +79,7 @@ impl YahooConnector {
     pub fn get_quote_period_interval(
         &self,
         ticker: &str,
-        period: &str,
+        range: &str,
         interval: &str,
         prepost: bool,
     ) -> Result<YResponse, YahooError> {
@@ -87,7 +87,7 @@ impl YahooConnector {
             YCHART_PERIOD_INTERVAL_QUERY!(),
             url = self.url,
             symbol = ticker,
-            period = period,
+            range = range,
             interval = interval,
             prepost = prepost,
         );

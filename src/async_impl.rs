@@ -85,7 +85,7 @@ impl YahooConnector {
     pub async fn get_quote_period_interval(
         &self,
         ticker: &str,
-        period: &str,
+        range: &str,
         interval: &str,
         prepost: bool,
     ) -> Result<YResponse, YahooError> {
@@ -93,7 +93,7 @@ impl YahooConnector {
             YCHART_PERIOD_INTERVAL_QUERY!(),
             url = self.url,
             symbol = ticker,
-            period = period,
+            range = range,
             interval = interval,
             prepost = prepost,
         );
@@ -376,6 +376,7 @@ mod tests {
 
         assert!(result.is_ok());
         let quote_summary = result.unwrap().quote_summary;
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
         assert!(
             "Cupertino"
                 == quote_summary.result[0]
@@ -386,6 +387,5 @@ mod tests {
                     .as_ref()
                     .unwrap()
         );
-        // Testing it retrieved info, hard coded but shouldn't change anytime soon
     }
 }
