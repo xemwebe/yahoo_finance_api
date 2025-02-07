@@ -1,3 +1,9 @@
+## Release 3.0.0
++ improved builder pattern
++ many more fields are now optional
++ using range query to retrive more data
++ add new query `get_ticker_info`
+
 ## Release 2.4.0
 + make post-market fields optional, since they are not always returned
 + add Cargo.lock to repository
@@ -19,7 +25,7 @@
 + add new method `build_with_agent(self, user_agent: &str)` to allow use of custom agent
 + constructor may fail now, returning a Result
 
-## Release 2.1.0
+## Release 2.1.0d
 + enable to retreive asset metadata
 + enable to fetch capital gains available on Mutual Funds
 + fix: support quote where firstTradeDate equals null

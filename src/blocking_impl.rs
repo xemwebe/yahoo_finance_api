@@ -115,6 +115,49 @@ impl YahooConnector {
         Ok(resp)
     }
 
+    // Get symbol metadata
+    pub fn get_ticker_info(symbol: &str) -> Result<YQuoteSummary, YahooError> {
+        let get_cookie_resp = reqwest::blocking::get(Y_GET_COOKIE_URL).unwrap();
+        let cookie = get_cookie_resp
+            .headers()
+            .get(Y_COOKIE_REQUEST_HEADER)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let jar_for_cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        jar_for_cookie.add_cookie_str(cookie, &reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap());
+        let intermediate_client_for_cookie = Client::builder()
+            .user_agent(USER_AGENT)
+            .cookie_provider(jar_for_cookie)
+            .build()
+            .unwrap();
+
+        let crumb = intermediate_client_for_cookie
+            .get(reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap())
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
+
+        let jar_for_info = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        let url_for_information = reqwest::Url::parse(
+            &(format!(YQUOTE_SUMMARY_QUERY!(), symbol = symbol, crumb = crumb)),
+        );
+        jar_for_info.add_cookie_str(cookie, &url_for_information.clone().unwrap());
+
+        let client_for_info = reqwest::blocking::Client::builder()
+            .user_agent(USER_AGENT)
+            .cookie_provider(jar_for_info)
+            .build()
+            .unwrap();
+        let resp = client_for_info
+            .get(url_for_information.unwrap())
+            .send()
+            .unwrap();
+        let result = resp.json().unwrap();
+        Ok(result)
+    }
+
     /// Send request to yahoo! finance server and transform response to JSON value
     fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         let resp = self.client.get(url).send()?;
@@ -271,6 +314,17 @@ mod tests {
     }
 
     #[test]
+    fn test_mutual_fund_latest_with_null_first_trade_date() {
+        let provider = YahooConnector::new().unwrap();
+        let response = provider.get_latest_quotes("SIWA.F", "1d").unwrap();
+
+        assert_eq!(&response.chart.result[0].meta.symbol, "SIWA.F");
+        assert_eq!(&response.chart.result[0].meta.range, "1mo");
+        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let _ = response.last_quote().unwrap();
+    }
+
+    #[test]
     fn test_mutual_fund_range() {
         let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("VTSAX", "1d", "1mo").unwrap();
@@ -297,5 +351,24 @@ mod tests {
         let resp = provider.search_options("AAPL");
 
         assert!(resp.is_ok());
+    }
+
+    #[test]
+    fn test_get_ticker_info() {
+        let result = YahooConnector::get_ticker_info("AAPL");
+
+        assert!(result.is_ok());
+        let quote_summary = result.unwrap().quote_summary;
+        // Testing it retrieved info, hard coded but shouldn't change anytime soon
+        assert!(
+            "Cupertino"
+                == quote_summary.result[0]
+                    .asset_profile
+                    .as_ref()
+                    .unwrap()
+                    .city
+                    .as_ref()
+                    .unwrap()
+        );
     }
 }

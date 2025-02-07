@@ -1,6 +1,6 @@
 [package]
 name = "yahoo_finance_api"
-version = "2.4.0"
+version = "3.0.0"
 authors = [
     "Mark Beinker <mwb@quantlink.de>",
     "Claus Matzinger <claus.matzinger+kb@gmail.com>",
@@ -19,7 +19,7 @@ include = ["src/**/*", "LICENSE-*", "README.md"]
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
-    "cookies"
+    "cookies",
 ] }
 rust_decimal = { version = "1.36", optional = true }
 serde_json = "1.0"

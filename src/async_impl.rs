@@ -303,14 +303,6 @@ mod tests {
     }
 
     #[test]
-    fn search_options() {
-        let provider = YahooConnector::new().unwrap();
-        let resp = tokio_test::block_on(provider.search_options("AAPL"));
-
-        assert!(resp.is_ok());
-    }
-
-    #[test]
     fn test_mutual_fund_history() {
         let provider = YahooConnector::new().unwrap();
 
@@ -368,6 +360,14 @@ mod tests {
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
         assert!(capital_gains.len() > 0usize);
+    }
+
+    #[test]
+    fn search_options() {
+        let provider = YahooConnector::new().unwrap();
+        let resp = tokio_test::block_on(provider.search_options("AAPL"));
+
+        assert!(resp.is_ok());
     }
 
     #[test]
