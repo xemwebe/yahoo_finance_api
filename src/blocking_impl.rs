@@ -85,7 +85,7 @@ impl YahooConnector {
             YCHART_PERIOD_INTERVAL_QUERY!(),
             url = self.url,
             symbol = ticker,
-            range = range,
+            period = range,
             interval = interval,
             prepost = prepost,
         );
@@ -437,13 +437,14 @@ mod tests {
 
     #[test]
     fn test_get_ticker_info() {
-        let result = YahooConnector::get_ticker_info("AAPL");
+        let mut provider = YahooConnector::new().unwrap();
 
-        assert!(result.is_ok());
+        let result = provider.get_ticker_info("AAPL");
+
         let quote_summary = result.unwrap().quote_summary;
         assert!(
             "Cupertino"
-                == quote_summary.result[0]
+                == quote_summary.unwrap().result[0]
                     .asset_profile
                     .as_ref()
                     .unwrap()
