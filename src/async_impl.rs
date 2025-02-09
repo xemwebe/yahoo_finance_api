@@ -90,7 +90,7 @@ impl YahooConnector {
             YCHART_PERIOD_INTERVAL_QUERY!(),
             url = self.url,
             symbol = ticker,
-            period = range,
+            range = range,
             interval = interval,
             prepost = prepost,
         );

@@ -214,9 +214,9 @@ macro_rules! YCHART_RANGE_QUERY {
   };
 }
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
-  () => {
-    "{url}/{symbol}?symbol={symbol}&period={period}&interval={interval}&includePrePost={prepost}"
-  };
+    () => {
+        "{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}"
+    };
 }
 macro_rules! YTICKER_QUERY {
     () => {
