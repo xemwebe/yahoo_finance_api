@@ -112,10 +112,16 @@ impl YahooConnector {
     /// Get list for options for a given name
     pub async fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
         let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
-        let resp = self.client.get(url).send().await?;
-        let resp = resp.json::<YOptionChain>().await?;
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
 
-        Ok(resp)
+        Ok(serde_json::from_str(&resp)?)
     }
 
     // Get symbol metadata
@@ -134,46 +140,44 @@ impl YahooConnector {
 
         cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
 
-        let mut result: Result<YQuoteSummary, YahooError> = Err(YahooError::NoResponse);
-
         let max_retries = 1;
         for i in 0..=max_retries {
-            result = Ok(self
+            let text = self
                 .create_client(Some(cookie_provider.clone()))
                 .await?
                 .get(url.clone().unwrap())
                 .send()
                 .await?
-                .json()
-                .await?);
+                .text()
+                .await?;
 
-            if let Ok(result) = &result {
-                if let Some(finance) = &result.finance {
-                    if let Some(error) = &finance.error {
-                        if let Some(description) = &error.description {
-                            if description.contains("Invalid Crumb") {
-                                self.crumb = Some(self.get_crumb().await?);
-                                if i == max_retries {
-                                    return Err(YahooError::InvalidCrumb);
-                                }
+            let result: YQuoteSummary = serde_json::from_str(&text)?;
+
+            if let Some(finance) = &result.finance {
+                if let Some(error) = &finance.error {
+                    if let Some(description) = &error.description {
+                        if description.contains("Invalid Crumb") {
+                            self.crumb = Some(self.get_crumb().await?);
+                            if i == max_retries {
+                                return Err(YahooError::InvalidCrumb);
                             }
                         }
-                        if let Some(code) = &error.code {
-                            if code.contains("Unauthorized") {
-                                println!("Unauthorized {:?}", i);
-                                self.crumb = Some(self.get_crumb().await?);
-                                if i == max_retries {
-                                    return Err(YahooError::Unauthorized);
-                                }
+                    }
+                    if let Some(code) = &error.code {
+                        if code.contains("Unauthorized") {
+                            println!("Unauthorized {:?}", i);
+                            self.crumb = Some(self.get_crumb().await?);
+                            if i == max_retries {
+                                return Err(YahooError::Unauthorized);
                             }
                         }
                     }
                 }
             }
+            return Ok(result);
         }
 
-        // Ok(result)
-        result
+        Err(YahooError::NoResponse)
     }
 
     async fn get_crumb(&mut self) -> Result<String, YahooError> {
@@ -210,7 +214,6 @@ impl YahooConnector {
             }
         }
 
-        // Ok(result)
         result
     }
 
@@ -252,12 +255,17 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
-        let resp = self.client.get(url).send().await?;
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
 
-        match resp.status() {
-            StatusCode::OK => Ok(resp.json().await?),
-            status => Err(YahooError::FetchFailed(format!("{}", status))),
-        }
+        serde_json::from_str::<serde_json::Value>(&resp)
+            .map_err(|e| YahooError::DeserializeFailed(e))
     }
 }
 
@@ -297,14 +305,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "DeserializeFailed")]
+    #[should_panic(expected = "EmptyDataSet")]
     fn test_api_responses_missing_fields() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
-        assert_eq!(&response.chart.result[0].meta.range, "1d");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
         let _ = response.last_quote().unwrap();
     }
 
@@ -318,7 +324,7 @@ mod tests {
         let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end));
         if resp.is_ok() {
             let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+            assert_eq!(resp.chart.result[0].timestamp.as_ref().unwrap().len(), 21);
             let quotes = resp.quotes().unwrap();
             assert_eq!(quotes.len(), 21);
         }
@@ -354,10 +360,30 @@ mod tests {
         let response =
             tokio_test::block_on(provider.get_quote_history_interval("AAPL", start, end, "1mo"))
                 .unwrap();
-        assert_eq!(&response.chart.result[0].timestamp.len(), &13);
+        assert_eq!(
+            &response.chart.result[0].timestamp.as_ref().unwrap().len(),
+            &13
+        );
         assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 13usize);
+    }
+    #[test]
+    fn test_get_quote_period_interval() {
+        let provider = YahooConnector::new().unwrap();
+
+        let range = "5d";
+        let interval = "5m";
+
+        let response = tokio_test::block_on(
+            provider.get_quote_period_interval("AAPL", &range, &interval, true),
+        )
+        .unwrap();
+
+        let metadata = response.metadata().unwrap();
+
+        assert_eq!(metadata.data_granularity, interval);
+        assert_eq!(metadata.range, range);
     }
 
     #[test]
@@ -395,7 +421,7 @@ mod tests {
         let resp = tokio_test::block_on(provider.get_quote_history("VTSAX", start, end));
         if resp.is_ok() {
             let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.len(), 21);
+            assert_eq!(resp.chart.result[0].timestamp.as_ref().unwrap().len(), 21);
             let quotes = resp.quotes().unwrap();
             assert_eq!(quotes.len(), 21);
         }

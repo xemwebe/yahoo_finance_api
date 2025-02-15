@@ -159,15 +159,18 @@ fn main() {
 "
 )]
 
+#[cfg(feature = "debug")]
+extern crate serde_json_path_to_error as serde_json;
+
 use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
+use reqwest::Proxy;
 #[cfg(not(feature = "blocking"))]
 use reqwest::{Client, ClientBuilder};
-use reqwest::{Proxy, StatusCode};
 
 // re-export time crate
 pub use quotes::decimal::Decimal;
