@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-use std::fmt;
-
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt;
 
 use super::YahooError;
 
@@ -28,23 +27,31 @@ pub struct YResponse {
 impl YResponse {
     fn check_consistency(&self) -> Result<(), YahooError> {
         for stock in &self.chart.result {
-            let n = stock.timestamp.len();
+            let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
+
             if n == 0 {
                 return Err(YahooError::EmptyDataSet);
             }
+
             let quote = &stock.indicators.quote[0];
-            if quote.open.len() != n
-                || quote.high.len() != n
-                || quote.low.len() != n
-                || quote.volume.len() != n
-                || quote.close.len() != n
+
+            if quote.open.is_none()
+                || quote.high.is_none()
+                || quote.low.is_none()
+                || quote.volume.is_none()
+                || quote.close.is_none()
             {
                 return Err(YahooError::DataInconsistency);
             }
-            if let Some(ref adjclose) = stock.indicators.adjclose {
-                if adjclose[0].adjclose.len() != n {
-                    return Err(YahooError::DataInconsistency);
-                }
+
+            let open_len = quote.open.as_ref().map_or(0, |v| v.len());
+            let high_len = quote.high.as_ref().map_or(0, |v| v.len());
+            let low_len = quote.low.as_ref().map_or(0, |v| v.len());
+            let volume_len = quote.volume.as_ref().map_or(0, |v| v.len());
+            let close_len = quote.close.as_ref().map_or(0, |v| v.len());
+
+            if open_len != n || high_len != n || low_len != n || volume_len != n || close_len != n {
+                return Err(YahooError::DataInconsistency);
             }
         }
         Ok(())
@@ -58,9 +65,13 @@ impl YResponse {
     pub fn last_quote(&self) -> Result<Quote, YahooError> {
         self.check_consistency()?;
         let stock = &self.chart.result[0];
-        let n = stock.timestamp.len();
+
+        let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
+
         for i in (0..n).rev() {
-            let quote = stock.indicators.get_ith_quote(stock.timestamp[i], i);
+            let quote = stock
+                .indicators
+                .get_ith_quote(stock.timestamp.as_ref().unwrap()[i], i);
             if quote.is_ok() {
                 return quote;
             }
@@ -70,11 +81,12 @@ impl YResponse {
 
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
         self.check_consistency()?;
+
         let stock: &YQuoteBlock = &self.chart.result[0];
         let mut quotes = Vec::new();
-        let n = stock.timestamp.len();
+        let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
         for i in 0..n {
-            let timestamp = stock.timestamp[i];
+            let timestamp = stock.timestamp.as_ref().unwrap()[i];
             let quote = stock.indicators.get_ith_quote(timestamp, i);
             if let Ok(q) = quote {
                 quotes.push(q);
@@ -158,7 +170,7 @@ pub struct YChart {
 #[derive(Deserialize, Debug)]
 pub struct YQuoteBlock {
     pub meta: YMetaData,
-    pub timestamp: Vec<u64>,
+    pub timestamp: Option<Vec<u64>>,
     pub events: Option<EventsBlock>,
     pub indicators: QuoteBlock,
 }
@@ -168,8 +180,8 @@ pub struct YQuoteBlock {
 pub struct YMetaData {
     pub currency: Option<String>,
     pub symbol: String,
-    pub long_name: String,
-    pub short_name: String,
+    pub long_name: Option<String>,
+    pub short_name: Option<String>,
     pub instrument_type: String,
     pub exchange_name: String,
     pub full_exchange_name: String,
@@ -179,12 +191,12 @@ pub struct YMetaData {
     pub gmtoffset: i32,
     pub timezone: String,
     pub exchange_timezone_name: String,
-    pub regular_market_price: Decimal,
-    pub chart_previous_close: Decimal,
+    pub regular_market_price: Option<Decimal>,
+    pub chart_previous_close: Option<Decimal>,
     pub previous_close: Option<Decimal>,
     pub has_pre_post_market_data: bool,
-    pub fifty_two_week_high: Decimal,
-    pub fifty_two_week_low: Decimal,
+    pub fifty_two_week_high: Option<Decimal>,
+    pub fifty_two_week_low: Option<Decimal>,
     pub regular_market_day_high: Option<Decimal>,
     pub regular_market_day_low: Option<Decimal>,
     pub regular_market_volume: Option<Decimal>,
@@ -307,21 +319,52 @@ pub struct QuoteBlock {
 impl QuoteBlock {
     fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
         let adjclose = match &self.adjclose {
-            Some(adjclose) => adjclose[0].adjclose[i],
+            Some(vec_of_adjclose) => match vec_of_adjclose[0].adjclose {
+                Some(ref adjclose) => adjclose[i],
+                None => None,
+            },
             None => None,
         };
+
         let quote = &self.quote[0];
         // reject if close is not set
-        if quote.close[i].is_none() {
+
+        let open = match quote.open {
+            Some(ref open) => open[i],
+            None => None,
+        };
+
+        let high = match quote.high {
+            Some(ref high) => high[i],
+            None => None,
+        };
+
+        let low = match quote.low {
+            Some(ref low) => low[i],
+            None => None,
+        };
+
+        let volume = match quote.volume {
+            Some(ref volume) => volume[i],
+            None => None,
+        };
+
+        let close = match quote.close {
+            Some(ref close) => close[i],
+            None => None,
+        };
+
+        if close.is_none() {
             return Err(YahooError::EmptyDataSet);
         }
+
         Ok(Quote {
             timestamp,
-            open: quote.open[i].unwrap_or(ZERO),
-            high: quote.high[i].unwrap_or(ZERO),
-            low: quote.low[i].unwrap_or(ZERO),
-            volume: quote.volume[i].unwrap_or(0),
-            close: quote.close[i].unwrap(),
+            open: open.unwrap_or(ZERO),
+            high: high.unwrap_or(ZERO),
+            low: low.unwrap_or(ZERO),
+            volume: volume.unwrap_or(0),
+            close: close.unwrap(),
             adjclose: adjclose.unwrap_or(ZERO),
         })
     }
@@ -329,16 +372,16 @@ impl QuoteBlock {
 
 #[derive(Deserialize, Debug)]
 pub struct AdjClose {
-    adjclose: Vec<Option<Decimal>>,
+    adjclose: Option<Vec<Option<Decimal>>>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct QuoteList {
-    pub volume: Vec<Option<u64>>,
-    pub high: Vec<Option<Decimal>>,
-    pub close: Vec<Option<Decimal>>,
-    pub low: Vec<Option<Decimal>>,
-    pub open: Vec<Option<Decimal>>,
+    pub volume: Option<Vec<Option<u64>>>,
+    pub high: Option<Vec<Option<Decimal>>>,
+    pub close: Option<Vec<Option<Decimal>>>,
+    pub low: Option<Vec<Option<Decimal>>>,
+    pub open: Option<Vec<Option<Decimal>>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -462,7 +505,7 @@ pub struct CompanyOfficer {
     pub age: Option<u32>,
     pub title: String,
     pub year_born: Option<u32>,
-    pub fiscal_year: u32,
+    pub fiscal_year: Option<u32>,
     pub total_pay: Option<ValueWrapper>,
 }
 
@@ -472,6 +515,22 @@ pub struct ValueWrapper {
     pub raw: Option<u64>,
     pub fmt: Option<String>,
     pub long_fmt: Option<String>,
+}
+
+fn deserialize_f64_with_infinity<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    match s {
+        serde_json::Value::String(ref v) if v == "Infinity" => Ok(Some(f64::MAX)),
+        serde_json::Value::Number(n) => n
+            .as_f64()
+            .ok_or_else(|| serde::de::Error::custom("Invalid number"))
+            .map(Some),
+        serde_json::Value::Null => Ok(None),
+        _ => Err(serde::de::Error::custom("Invalid type for f64")),
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -493,7 +552,12 @@ pub struct SummaryDetail {
     pub payout_ratio: Option<f64>,
     pub five_year_avg_dividend_yield: Option<f64>,
     pub beta: Option<f64>,
-    #[serde(rename = "trailingPE")]
+    /// The trailing_pe field may contain the string "Infinity" instead of f64, in which case we return f64::MAX
+    #[serde(
+        default,
+        deserialize_with = "deserialize_f64_with_infinity",
+        rename = "trailingPE"
+    )]
     pub trailing_pe: Option<f64>,
     #[serde(rename = "forwardPE")]
     pub forward_pe: Option<f64>,
@@ -534,7 +598,7 @@ pub struct SummaryDetail {
 pub struct DefaultKeyStatistics {
     pub max_age: Option<u64>,
     pub price_hint: Option<u64>,
-    pub enterprise_value: Option<u64>,
+    pub enterprise_value: Option<i64>,
     #[serde(rename = "forwardPE")]
     pub forward_pe: Option<f64>,
     pub profit_margins: Option<f64>,
@@ -561,7 +625,7 @@ pub struct DefaultKeyStatistics {
     pub next_fiscal_year_end: Option<u64>,
     pub most_recent_quarter: Option<u64>,
     pub earnings_quarterly_growth: Option<f64>,
-    pub net_income_to_common: Option<u64>,
+    pub net_income_to_common: Option<i64>,
     pub trailing_eps: Option<f64>,
     pub forward_eps: Option<f64>,
     pub last_split_factor: Option<String>,
@@ -612,18 +676,18 @@ pub struct FinancialData {
     pub number_of_analyst_opinions: Option<u64>,
     pub total_cash: Option<u64>,
     pub total_cash_per_share: Option<f64>,
-    pub ebitda: Option<u64>,
+    pub ebitda: Option<i64>,
     pub total_debt: Option<u64>,
     pub quick_ratio: Option<f64>,
     pub current_ratio: Option<f64>,
-    pub total_revenue: Option<u64>,
+    pub total_revenue: Option<i64>,
     pub debt_to_equity: Option<f64>,
     pub revenue_per_share: Option<f64>,
     pub return_on_assets: Option<f64>,
     pub return_on_equity: Option<f64>,
-    pub gross_profits: Option<u64>,
-    pub free_cashflow: Option<u64>,
-    pub operating_cashflow: Option<u64>,
+    pub gross_profits: Option<i64>,
+    pub free_cashflow: Option<i64>,
+    pub operating_cashflow: Option<i64>,
     pub earnings_growth: Option<f64>,
     pub revenue_growth: Option<f64>,
     pub gross_margins: Option<f64>,
@@ -777,5 +841,28 @@ mod tests {
         let trading_periods_deserialized: TradingPeriods =
             serde_json::from_str(trading_periods_json).unwrap();
         assert_eq!(&trading_periods_expected, &trading_periods_deserialized);
+    }
+
+    #[test]
+    fn test_deserialize_f64_with_infinity() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct MyStruct {
+            #[serde(default, deserialize_with = "deserialize_f64_with_infinity")]
+            bad: Option<f64>,
+            good: Option<f64>,
+        }
+
+        let json_data = r#"{ "bad": "Infinity", "good": 999.999 }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
+
+        let json_data = r#"{ "bad": 123.45 }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
+
+        let json_data = r#"{ "bad": null }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
+
+        let json_data = r#"{ }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
     }
 }
