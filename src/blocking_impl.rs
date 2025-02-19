@@ -283,7 +283,6 @@ mod tests {
         let response = provider.get_latest_quotes("BF.B", "1m").unwrap();
 
         assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
-        // assert_eq!(&response.chart.result[0].meta.data_granularity, "1m");
         let _ = response.last_quote().unwrap();
     }
 
