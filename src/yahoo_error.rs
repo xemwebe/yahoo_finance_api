@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::quotes::YErrorMessage;
+
 #[derive(Error, Debug)]
 pub enum YahooError {
     #[error("fetching the data from yahoo! finance failed")]
@@ -8,11 +10,13 @@ pub enum YahooError {
     DeserializeFailed(#[from] serde_json::Error),
     #[error("connection to yahoo! finance server failed")]
     ConnectionFailed(#[from] reqwest::Error),
+    #[error("yahoo! finance returned api error")]
+    ApiError(YErrorMessage),
     #[error("yahoo! finance returned an empty data set")]
     EmptyDataSet,
     #[error("yahoo! finance returned inconsistent data")]
     DataInconsistency,
-    #[error("construcing yahoo! finance client failed")]
+    #[error("constructing yahoo! finance client failed")]
     BuilderFailed,
     #[error("No cookies in response headers")]
     NoCookies,

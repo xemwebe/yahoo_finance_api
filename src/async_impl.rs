@@ -35,7 +35,7 @@ impl YahooConnector {
             interval = interval,
             range = range
         );
-        YResponse::from_json(self.send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
     /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
@@ -54,7 +54,7 @@ impl YahooConnector {
             end = end.unix_timestamp(),
             interval = interval,
         );
-        YResponse::from_json(self.send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
     /// Retrieve the quote history for the given ticker form date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
@@ -75,7 +75,7 @@ impl YahooConnector {
             interval = interval,
             prepost = prepost,
         );
-        YResponse::from_json(self.send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
     /// Retrieve the quote history for the given ticker for a given period and ticker interval and optionally before and after regular trading hours
@@ -94,7 +94,7 @@ impl YahooConnector {
             interval = interval,
             prepost = prepost,
         );
-        YResponse::from_json(self.send_request(&url).await?)
+        YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
     /// Retrieve the list of quotes found searching a given name
@@ -112,14 +112,7 @@ impl YahooConnector {
     /// Get list for options for a given name
     pub async fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
         let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
-        let resp = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .text()
-            .await?;
+        let resp = self.client.get(url).send().await?.text().await?;
 
         Ok(serde_json::from_str(&resp)?)
     }
@@ -255,14 +248,7 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
-        let resp = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()?
-            .text()
-            .await?;
+        let resp = self.client.get(url).send().await?.text().await?;
 
         serde_json::from_str::<serde_json::Value>(&resp)
             .map_err(|e| YahooError::DeserializeFailed(e))
@@ -279,9 +265,11 @@ mod tests {
     fn test_get_single_quote() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("HNL.DE", "1d")).unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+
+        let result = &response.chart.result.as_ref().unwrap();
+        assert_eq!(&result[0].meta.symbol, "HNL.DE");
+        assert_eq!(&result[0].meta.range, "1mo");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
 
@@ -292,16 +280,14 @@ mod tests {
         let start = datetime!(2019-07-03 0:00:00.00 UTC);
         let end = datetime!(2020-07-04 23:59:59.99 UTC);
 
-        let resp = tokio_test::block_on(provider.get_quote_history("IBM", start, end)).unwrap();
+        let response = tokio_test::block_on(provider.get_quote_history("IBM", start, end)).unwrap();
+        let result = &response.chart.result.as_ref().unwrap();
 
-        assert_eq!(&resp.chart.result[0].meta.symbol, "IBM");
-        assert_eq!(&resp.chart.result[0].meta.data_granularity, "1d");
-        assert_eq!(
-            &resp.chart.result[0].meta.first_trade_date,
-            &Some(-252322200)
-        );
+        assert_eq!(&result[0].meta.symbol, "IBM");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
+        assert_eq!(&result[0].meta.first_trade_date, &Some(-252322200));
 
-        let _ = resp.last_quote().unwrap();
+        let _ = response.last_quote().unwrap();
     }
 
     #[test]
@@ -309,8 +295,9 @@ mod tests {
     fn test_api_responses_missing_fields() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();
+        let result = &response.chart.result.as_ref().unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "BF.B");
+        assert_eq!(&result[0].meta.symbol, "BF.B");
         let _ = response.last_quote().unwrap();
     }
 
@@ -321,11 +308,14 @@ mod tests {
         let start = datetime!(2020-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
-        let resp = tokio_test::block_on(provider.get_quote_history("AAPL", start, end));
-        if resp.is_ok() {
-            let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.as_ref().unwrap().len(), 21);
-            let quotes = resp.quotes().unwrap();
+        let response = tokio_test::block_on(provider.get_quote_history("AAPL", start, end));
+
+        if response.is_ok() {
+            let response = response.unwrap();
+            let result = &response.chart.result.as_ref().unwrap();
+            assert_eq!(result[0].timestamp.as_ref().unwrap().len(), 21);
+
+            let quotes = response.quotes().unwrap();
             assert_eq!(quotes.len(), 21);
         }
     }
@@ -335,9 +325,11 @@ mod tests {
         let provider = YahooConnector::new().unwrap();
         let response =
             tokio_test::block_on(provider.get_quote_range("HNL.DE", "1d", "1mo")).unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "HNL.DE");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let result = &response.chart.result.as_ref().unwrap();
+
+        assert_eq!(&result[0].meta.symbol, "HNL.DE");
+        assert_eq!(&result[0].meta.range, "1mo");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
 
@@ -351,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get() {
+    fn test_get_quote_history_interval() {
         let provider = YahooConnector::new().unwrap();
 
         let start = datetime!(2019-01-01 0:00:00.00 UTC);
@@ -360,14 +352,31 @@ mod tests {
         let response =
             tokio_test::block_on(provider.get_quote_history_interval("AAPL", start, end, "1mo"))
                 .unwrap();
-        assert_eq!(
-            &response.chart.result[0].timestamp.as_ref().unwrap().len(),
-            &13
-        );
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1mo");
+        let result = &response.chart.result.as_ref().unwrap();
+
+        assert_eq!(&result[0].timestamp.as_ref().unwrap().len(), &13);
+        assert_eq!(&result[0].meta.data_granularity, "1mo");
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 13usize);
     }
+
+    #[test]
+    #[should_panic(expected = "ApiError")]
+    fn test_wrong_request_get_quote_history_interval() {
+        let provider = YahooConnector::new().unwrap();
+        let end = OffsetDateTime::now_utc();
+        let days = 365;
+        let start = end - Duration::from_secs(days * 24 * 60 * 60);
+        let interval = "5m";
+        let ticker = "AAPL";
+        let prepost = true;
+
+        let _ = tokio_test::block_on(
+            provider.get_quote_history_interval_prepost(ticker, start, end, interval, prepost),
+        )
+        .unwrap();
+    }
+
     #[test]
     fn test_get_quote_period_interval() {
         let provider = YahooConnector::new().unwrap();
@@ -418,11 +427,15 @@ mod tests {
         let start = datetime!(2020-01-01 0:00:00.00 UTC);
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
-        let resp = tokio_test::block_on(provider.get_quote_history("VTSAX", start, end));
-        if resp.is_ok() {
-            let resp = resp.unwrap();
-            assert_eq!(resp.chart.result[0].timestamp.as_ref().unwrap().len(), 21);
-            let quotes = resp.quotes().unwrap();
+        let response = tokio_test::block_on(provider.get_quote_history("VTSAX", start, end));
+
+        if response.is_ok() {
+            let response = response.unwrap();
+            let result = &response.chart.result.as_ref().unwrap();
+
+            assert_eq!(result[0].timestamp.as_ref().unwrap().len(), 21);
+
+            let quotes = response.quotes().unwrap();
             assert_eq!(quotes.len(), 21);
         }
     }
@@ -431,10 +444,11 @@ mod tests {
     fn test_mutual_fund_latest() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("VTSAX", "1d")).unwrap();
+        let result = &response.chart.result.as_ref().unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        assert_eq!(&result[0].meta.symbol, "VTSAX");
+        assert_eq!(&result[0].meta.range, "1mo");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
 
@@ -442,10 +456,11 @@ mod tests {
     fn test_mutual_fund_latest_with_null_first_trade_date() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("SIWA.F", "1d")).unwrap();
+        let result = &response.chart.result.as_ref().unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "SIWA.F");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        assert_eq!(&result[0].meta.symbol, "SIWA.F");
+        assert_eq!(&result[0].meta.range, "1mo");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
         let _ = response.last_quote().unwrap();
     }
 
@@ -454,19 +469,22 @@ mod tests {
         let provider = YahooConnector::new().unwrap();
         let response =
             tokio_test::block_on(provider.get_quote_range("VTSAX", "1d", "1mo")).unwrap();
-        assert_eq!(&response.chart.result[0].meta.symbol, "VTSAX");
-        assert_eq!(&response.chart.result[0].meta.range, "1mo");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        let result = &response.chart.result.as_ref().unwrap();
+
+        assert_eq!(&result[0].meta.symbol, "VTSAX");
+        assert_eq!(&result[0].meta.range, "1mo");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
     }
 
     #[test]
     fn test_mutual_fund_capital_gains() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_quote_range("AMAGX", "1d", "5y")).unwrap();
+        let result = &response.chart.result.as_ref().unwrap();
 
-        assert_eq!(&response.chart.result[0].meta.symbol, "AMAGX");
-        assert_eq!(&response.chart.result[0].meta.range, "5y");
-        assert_eq!(&response.chart.result[0].meta.data_granularity, "1d");
+        assert_eq!(&result[0].meta.symbol, "AMAGX");
+        assert_eq!(&result[0].meta.range, "5y");
+        assert_eq!(&result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
         assert!(capital_gains.len() > 0usize);
     }
