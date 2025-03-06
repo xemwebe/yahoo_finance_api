@@ -480,7 +480,7 @@ mod tests {
 
         let result = provider.get_ticker_info("AAPL");
 
-        let quote_summary = result.unwrap().quote_summary;
+        let quote_summary = result.unwrap().quote_summary.unwrap();
         assert!(
             "Cupertino"
                 == quote_summary.result.as_ref().unwrap()[0]
