@@ -472,8 +472,8 @@ pub struct YErrorMessage {
 
 #[derive(Deserialize, Debug)]
 pub struct ExtendedQuoteSummary {
-    pub result: Vec<YSummaryData>,
-    pub error: Option<serde_json::Value>,
+    pub result: Option<Vec<YSummaryData>>,
+    pub error: Option<YErrorMessage>,
 }
 
 impl YQuoteSummary {
@@ -537,19 +537,28 @@ pub struct ValueWrapper {
     pub long_fmt: Option<String>,
 }
 
-fn deserialize_f64_with_infinity<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+fn deserialize_f64_special<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
     match s {
-        serde_json::Value::String(ref v) if v == "Infinity" => Ok(Some(f64::MAX)),
+        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("infinity") => {
+            Ok(Some(f64::INFINITY))
+        }
+        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("-infinity") => {
+            Ok(Some(f64::NEG_INFINITY))
+        }
+        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("nan") => Ok(Some(f64::NAN)),
         serde_json::Value::Number(n) => n
             .as_f64()
             .ok_or_else(|| serde::de::Error::custom("Invalid number"))
             .map(Some),
         serde_json::Value::Null => Ok(None),
-        _ => Err(serde::de::Error::custom("Invalid type for f64")),
+        _ => Err(serde::de::Error::custom(format!(
+            "Invalid type for f64: {:?}",
+            s
+        ))),
     }
 }
 
@@ -575,11 +584,15 @@ pub struct SummaryDetail {
     /// The trailing_pe field may contain the string "Infinity" instead of f64, in which case we return f64::MAX
     #[serde(
         default,
-        deserialize_with = "deserialize_f64_with_infinity",
+        deserialize_with = "deserialize_f64_special",
         rename = "trailingPE"
     )]
     pub trailing_pe: Option<f64>,
-    #[serde(rename = "forwardPE")]
+    #[serde(
+        default,
+        rename = "forwardPE",
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub forward_pe: Option<f64>,
     pub volume: Option<u64>,
     pub regular_market_volume: Option<u64>,
@@ -595,11 +608,16 @@ pub struct SummaryDetail {
     pub market_cap: Option<u64>,
     pub fifty_two_week_low: Option<f64>,
     pub fifty_two_week_high: Option<f64>,
-    #[serde(rename = "priceToSalesTrailing12Months")]
+    #[serde(
+        default,
+        rename = "priceToSalesTrailing12Months",
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub price_to_sales_trailing12months: Option<f64>,
     pub fifty_day_average: Option<f64>,
     pub two_hundred_day_average: Option<f64>,
     pub trailing_annual_dividend_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_annual_dividend_yield: Option<f64>,
     pub currency: Option<String>,
     pub from_currency: Option<String>,
@@ -619,7 +637,11 @@ pub struct DefaultKeyStatistics {
     pub max_age: Option<u64>,
     pub price_hint: Option<u64>,
     pub enterprise_value: Option<i64>,
-    #[serde(rename = "forwardPE")]
+    #[serde(
+        default,
+        rename = "forwardPE",
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub forward_pe: Option<f64>,
     pub profit_margins: Option<f64>,
     pub float_shares: Option<u64>,
@@ -649,7 +671,7 @@ pub struct DefaultKeyStatistics {
     pub trailing_eps: Option<f64>,
     pub forward_eps: Option<f64>,
     pub last_split_factor: Option<String>,
-    pub last_split_date: Option<u64>,
+    pub last_split_date: Option<i64>,
     pub enterprise_to_revenue: Option<f64>,
     pub enterprise_to_ebitda: Option<f64>,
     #[serde(rename = "52WeekChange")]
@@ -671,7 +693,7 @@ pub struct QuoteType {
     pub underlying_symbol: Option<String>,
     pub short_name: Option<String>,
     pub long_name: Option<String>,
-    pub first_trade_date_epoch_utc: Option<u64>,
+    pub first_trade_date_epoch_utc: Option<i64>,
     #[serde(rename = "timeZoneFullName")]
     pub timezone_full_name: Option<String>,
     #[serde(rename = "timeZoneShortName")]
@@ -864,11 +886,11 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_f64_with_infinity() {
+    fn test_deserialize_f64_special() {
         #[derive(Debug, Deserialize)]
         #[allow(dead_code)]
         struct MyStruct {
-            #[serde(default, deserialize_with = "deserialize_f64_with_infinity")]
+            #[serde(default, deserialize_with = "deserialize_f64_special")]
             bad: Option<f64>,
             good: Option<f64>,
         }
@@ -880,6 +902,12 @@ mod tests {
         let _: MyStruct = serde_json::from_str(json_data).unwrap();
 
         let json_data = r#"{ "bad": null }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
+
+        let json_data = r#"{ "bad": "NaN" }"#;
+        let _: MyStruct = serde_json::from_str(json_data).unwrap();
+
+        let json_data = r#"{ "bad": "-Infinity" }"#;
         let _: MyStruct = serde_json::from_str(json_data).unwrap();
 
         let json_data = r#"{ }"#;

@@ -506,7 +506,7 @@ mod tests {
         let quote_summary = result.unwrap().quote_summary.unwrap();
         assert!(
             "Cupertino"
-                == quote_summary.result[0]
+                == quote_summary.result.as_ref().unwrap()[0]
                     .asset_profile
                     .as_ref()
                     .unwrap()
