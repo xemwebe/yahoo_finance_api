@@ -13,7 +13,9 @@ pub enum YahooError {
     #[error("yahoo! finance returned api error")]
     ApiError(YErrorMessage),
     #[error("yahoo! finance returned an empty data set")]
-    EmptyDataSet,
+    NoResult,
+    #[error("yahoo! finance returned an empty data set")]
+    NoQuotes,
     #[error("yahoo! finance returned inconsistent data")]
     DataInconsistency,
     #[error("constructing yahoo! finance client failed")]

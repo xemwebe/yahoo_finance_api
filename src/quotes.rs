@@ -34,16 +34,16 @@ impl YResponse {
         Ok(self)
     }
 
-    fn check_consistency(&self) -> Result<&Vec<YQuoteBlock>, YahooError> {
+    fn check_historical_consistency(&self) -> Result<&Vec<YQuoteBlock>, YahooError> {
         let Some(result) = &self.chart.result else {
-            return Err(YahooError::EmptyDataSet);
+            return Err(YahooError::NoResult);
         };
 
         for stock in result {
             let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
 
             if n == 0 {
-                return Err(YahooError::EmptyDataSet);
+                return Err(YahooError::NoQuotes);
             }
 
             let quote = &stock.indicators.quote[0];
@@ -76,12 +76,7 @@ impl YResponse {
 
     /// Return the latest valid quote
     pub fn last_quote(&self) -> Result<Quote, YahooError> {
-        let stock = &self.check_consistency()?[0];
-
-        // let Some(result) = &self.chart.result else {
-        //     return Err(YahooError::EmptyDataSet);
-        // };
-        // let stock = &result[0];
+        let stock = &self.check_historical_consistency()?[0];
 
         let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
 
@@ -93,11 +88,11 @@ impl YResponse {
                 return quote;
             }
         }
-        Err(YahooError::EmptyDataSet)
+        Err(YahooError::NoQuotes)
     }
 
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
-        let stock = &self.check_consistency()?[0];
+        let stock = &self.check_historical_consistency()?[0];
 
         let mut quotes = Vec::new();
         let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
@@ -112,18 +107,21 @@ impl YResponse {
     }
 
     pub fn metadata(&self) -> Result<YMetaData, YahooError> {
-        // self.check_consistency()?;
-        // let stock = &self.chart.result[0];
-        let stock = &self.check_consistency()?[0];
+        let Some(result) = &self.chart.result else {
+            return Err(YahooError::NoResult);
+        };
+        let stock = &result[0];
         Ok(stock.meta.to_owned())
     }
 
     /// This method retrieves information about the splits that might have
     /// occured during the considered time period
     pub fn splits(&self) -> Result<Vec<Split>, YahooError> {
-        // self.check_consistency()?;
-        // let stock = &self.chart.result[0];
-        let stock = &self.check_consistency()?[0];
+        let Some(result) = &self.chart.result else {
+            return Err(YahooError::NoResult);
+        };
+        let stock = &result[0];
+
         if let Some(events) = &stock.events {
             if let Some(splits) = &events.splits {
                 let mut data = splits.values().cloned().collect::<Vec<Split>>();
@@ -139,9 +137,11 @@ impl YResponse {
     ///
     /// Note: Date is the ex-dividend date)
     pub fn dividends(&self) -> Result<Vec<Dividend>, YahooError> {
-        // self.check_consistency()?;
-        // let stock = &self.chart.result[0];
-        let stock = &self.check_consistency()?[0];
+        let Some(result) = &self.chart.result else {
+            return Err(YahooError::NoResult);
+        };
+        let stock = &result[0];
+
         if let Some(events) = &stock.events {
             if let Some(dividends) = &events.dividends {
                 let mut data = dividends.values().cloned().collect::<Vec<Dividend>>();
@@ -155,9 +155,11 @@ impl YResponse {
     /// This method retrieves information about the capital gains that might have
     /// occured during the considered time period (available only for Mutual Funds)
     pub fn capital_gains(&self) -> Result<Vec<CapitalGain>, YahooError> {
-        // self.check_consistency()?;
-        // let stock = &self.chart.result[0];
-        let stock = &self.check_consistency()?[0];
+        let Some(result) = &self.chart.result else {
+            return Err(YahooError::NoResult);
+        };
+        let stock = &result[0];
+
         if let Some(events) = &stock.events {
             if let Some(capital_gain) = &events.capital_gains {
                 let mut data = capital_gain.values().cloned().collect::<Vec<CapitalGain>>();
@@ -375,7 +377,7 @@ impl QuoteBlock {
         };
 
         if close.is_none() {
-            return Err(YahooError::EmptyDataSet);
+            return Err(YahooError::NoQuotes);
         }
 
         Ok(Quote {
