@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "EmptyDataSet")]
+    #[should_panic(expected = "NoQuotes")]
     fn test_api_responses_missing_fields() {
         let provider = YahooConnector::new().unwrap();
         let response = tokio_test::block_on(provider.get_latest_quotes("BF.B", "1m")).unwrap();
