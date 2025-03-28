@@ -209,7 +209,7 @@ pub struct YMetaData {
     pub full_exchange_name: String,
     #[serde(default)]
     pub first_trade_date: Option<i32>,
-    pub regular_market_time: u32,
+    pub regular_market_time: Option<u32>,
     pub gmtoffset: i32,
     pub timezone: String,
     pub exchange_timezone_name: String,
