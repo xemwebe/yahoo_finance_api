@@ -25,7 +25,7 @@ pub struct YResponse {
 }
 
 impl YResponse {
-    pub fn map_error_msg(self) -> Result<YResponse, YahooError> {
+    pub(crate) fn map_error_msg(self) -> Result<YResponse, YahooError> {
         if self.chart.result.is_none() {
             if let Some(y_error) = self.chart.error {
                 return Err(YahooError::ApiError(y_error));
