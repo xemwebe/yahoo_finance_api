@@ -315,7 +315,7 @@ impl YahooConnectorBuilder {
         }
 
         Ok(YahooConnector {
-            client: self.inner.build()?,
+            client: self.inner.use_rustls_tls().build()?,
             timeout: self.timeout,
             user_agent: self.user_agent,
             proxy: self.proxy,
