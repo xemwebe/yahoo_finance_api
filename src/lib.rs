@@ -265,10 +265,11 @@ impl YahooConnector {
             ..Default::default()
         }
     }
-}
 
-impl Default for YahooConnector {
-    fn default() -> Self {
+    /// Internal default implementation used exclusively by the builder.
+    /// Note: This default implementation does not set the user agent in the client,
+    /// so it does not work on its own. The builder will set the user agent.
+    fn default_internal() -> Self {
         YahooConnector {
             client: Client::default(),
             url: YCHART_URL,
@@ -318,14 +319,14 @@ impl YahooConnectorBuilder {
             timeout: self.timeout,
             user_agent: self.user_agent,
             proxy: self.proxy,
-            ..Default::default()
+            ..YahooConnector::default_internal()
         })
     }
 
     pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
-            ..Default::default()
+            ..YahooConnector::default_internal()
         })
     }
 }
