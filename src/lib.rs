@@ -303,7 +303,7 @@ impl YahooConnectorBuilder {
 
     pub fn build(mut self) -> Result<YahooConnector, YahooError> {
         if let Some(timeout) = &self.timeout {
-            self.inner = self.inner.timeout(timeout.clone());
+            self.inner = self.inner.timeout(*timeout);
         }
         if let Some(user_agent) = &self.user_agent {
             self.inner = self.inner.user_agent(user_agent.clone());

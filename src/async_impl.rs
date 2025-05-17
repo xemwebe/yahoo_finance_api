@@ -111,7 +111,7 @@ impl YahooConnector {
 
     // Get symbol metadata
     pub async fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
-        if let None = &self.crumb {
+        if self.crumb.is_none() {
             self.crumb = Some(self.get_crumb().await?);
         }
         let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
@@ -145,15 +145,18 @@ impl YahooConnector {
                             self.crumb = Some(self.get_crumb().await?);
                             if i == max_retries {
                                 return Err(YahooError::InvalidCrumb);
+                            } else {
+                                continue;
                             }
                         }
                     }
                     if let Some(code) = &error.code {
                         if code.contains("Unauthorized") {
-                            println!("Unauthorized {:?}", i);
                             self.crumb = Some(self.get_crumb().await?);
                             if i == max_retries {
                                 return Err(YahooError::Unauthorized);
+                            } else {
+                                continue;
                             }
                         }
                     }
@@ -166,7 +169,7 @@ impl YahooConnector {
     }
 
     async fn get_crumb(&mut self) -> Result<String, YahooError> {
-        if let None = &self.cookie {
+        if self.cookie.is_none() {
             self.cookie = Some(self.get_cookie().await?);
         }
 
@@ -226,7 +229,7 @@ impl YahooConnector {
             client_builder = client_builder.cookie_provider(cookie_provider);
         }
         if let Some(timeout) = &self.timeout {
-            client_builder = client_builder.timeout(timeout.clone());
+            client_builder = client_builder.timeout(*timeout);
         }
         if let Some(user_agent) = &self.user_agent {
             client_builder = client_builder.user_agent(user_agent.clone());
@@ -242,8 +245,7 @@ impl YahooConnector {
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         let resp = self.client.get(url).send().await?.text().await?;
 
-        serde_json::from_str::<serde_json::Value>(&resp)
-            .map_err(|e| YahooError::DeserializeFailed(e))
+        serde_json::from_str::<serde_json::Value>(&resp).map_err(YahooError::DeserializeFailed)
     }
 }
 
