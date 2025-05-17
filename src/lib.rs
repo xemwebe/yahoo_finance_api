@@ -34,7 +34,6 @@ fn main() {
 # Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use time::{macros::datetime, OffsetDateTime};
 use tokio_test;
 
@@ -53,7 +52,6 @@ Another method to retrieve a range of quotes is by requesting the quotes for a g
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use tokio_test;
 
 fn main() {
@@ -111,7 +109,6 @@ fn main() {
 # Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use time::{macros::datetime, OffsetDateTime};
 
 fn main() {

@@ -22,14 +22,13 @@ fn main() {
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
-        OffsetDateTime::from_from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
     println!("At {} quote price of Apple was {}", time, quote.close);
 }
 ```
 # Get history of quotes for given time period:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use time::{macros::datetime, OffsetDateTime};
 use tokio_test;
 
@@ -48,7 +47,6 @@ Another method to retrieve a range of quotes is by requesting the quotes for a g
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use tokio_test;
 
 fn main() {
