@@ -174,7 +174,7 @@ impl YResponse {
 /// Struct for single quote
 #[derive(Debug, Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Quote {
-    pub timestamp: u64,
+    pub timestamp: i64,
     pub open: Decimal,
     pub high: Decimal,
     pub low: Decimal,
@@ -192,7 +192,7 @@ pub struct YChart {
 #[derive(Deserialize, Debug)]
 pub struct YQuoteBlock {
     pub meta: YMetaData,
-    pub timestamp: Option<Vec<u64>>,
+    pub timestamp: Option<Vec<i64>>,
     pub events: Option<EventsBlock>,
     pub indicators: QuoteBlock,
 }
@@ -339,7 +339,7 @@ pub struct QuoteBlock {
 }
 
 impl QuoteBlock {
-    fn get_ith_quote(&self, timestamp: u64, i: usize) -> Result<Quote, YahooError> {
+    fn get_ith_quote(&self, timestamp: i64, i: usize) -> Result<Quote, YahooError> {
         let adjclose = match &self.adjclose {
             Some(vec_of_adjclose) => match vec_of_adjclose[0].adjclose {
                 Some(ref adjclose) => adjclose[i],
@@ -408,17 +408,17 @@ pub struct QuoteList {
 
 #[derive(Deserialize, Debug)]
 pub struct EventsBlock {
-    pub splits: Option<HashMap<u64, Split>>,
-    pub dividends: Option<HashMap<u64, Dividend>>,
+    pub splits: Option<HashMap<i64, Split>>,
+    pub dividends: Option<HashMap<i64, Dividend>>,
     #[serde(rename = "capitalGains")]
-    pub capital_gains: Option<HashMap<u64, CapitalGain>>,
+    pub capital_gains: Option<HashMap<i64, CapitalGain>>,
 }
 
 /// This structure simply models a split that has occured.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Split {
     /// This is the date (timestamp) when the split occured
-    pub date: u64,
+    pub date: i64,
     /// Numerator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
     /// denom is 5). A reverse split is considered as nothing but a regular
@@ -439,8 +439,8 @@ pub struct Split {
 pub struct Dividend {
     /// This is the price of the dividend
     pub amount: Decimal,
-    /// This is the ex-dividend date
-    pub date: u64,
+    /// This is the ex-dividend date as UNIX timestamp
+    pub date: i64,
 }
 
 /// This structure simply models a capital gain which has been recorded.
@@ -449,7 +449,7 @@ pub struct CapitalGain {
     /// This is the amount of capital gain distributed by the fund
     pub amount: f64,
     /// This is the recorded date of the capital gain
-    pub date: u64,
+    pub date: i64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -534,7 +534,7 @@ pub struct CompanyOfficer {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ValueWrapper {
-    pub raw: Option<u64>,
+    pub raw: Option<i64>,
     pub fmt: Option<String>,
     pub long_fmt: Option<String>,
 }
@@ -636,7 +636,7 @@ pub struct SummaryDetail {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DefaultKeyStatistics {
-    pub max_age: Option<u64>,
+    pub max_age: Option<i64>,
     pub price_hint: Option<u64>,
     pub enterprise_value: Option<i64>,
     #[serde(
@@ -651,7 +651,7 @@ pub struct DefaultKeyStatistics {
     pub shares_short: Option<u64>,
     pub shares_short_prior_month: Option<u64>,
     pub shares_short_previous_month_date: Option<u64>,
-    pub date_short_interest: Option<u64>,
+    pub date_short_interest: Option<i64>,
     pub shares_percent_shares_out: Option<f64>,
     pub held_percent_insiders: Option<f64>,
     pub held_percent_institutions: Option<f64>,
@@ -665,9 +665,9 @@ pub struct DefaultKeyStatistics {
     pub fund_family: Option<String>,
     pub fund_inception_date: Option<u32>,
     pub legal_type: Option<String>,
-    pub last_fiscal_year_end: Option<u64>,
-    pub next_fiscal_year_end: Option<u64>,
-    pub most_recent_quarter: Option<u64>,
+    pub last_fiscal_year_end: Option<i64>,
+    pub next_fiscal_year_end: Option<i64>,
+    pub most_recent_quarter: Option<i64>,
     pub earnings_quarterly_growth: Option<f64>,
     pub net_income_to_common: Option<i64>,
     pub trailing_eps: Option<f64>,
@@ -681,7 +681,7 @@ pub struct DefaultKeyStatistics {
     #[serde(rename = "SandP52WeekChange")]
     pub sand_p_fifty_two_week_change: Option<f64>,
     pub last_dividend_value: Option<f64>,
-    pub last_dividend_date: Option<u64>,
+    pub last_dividend_date: Option<i64>,
     pub latest_share_class: Option<String>,
     pub lead_investor: Option<String>,
 }
@@ -703,13 +703,13 @@ pub struct QuoteType {
     pub uuid: Option<String>,
     pub message_board_id: Option<String>,
     pub gmt_off_set_milliseconds: Option<i64>,
-    pub max_age: Option<u64>,
+    pub max_age: Option<i64>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FinancialData {
-    pub max_age: Option<u64>,
+    pub max_age: Option<i64>,
     pub current_price: Option<f64>,
     pub target_high_price: Option<f64>,
     pub target_low_price: Option<f64>,

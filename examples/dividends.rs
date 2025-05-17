@@ -1,5 +1,3 @@
-use std::time::{Duration, UNIX_EPOCH};
-
 use time::macros::datetime;
 use time::OffsetDateTime;
 
@@ -17,14 +15,14 @@ async fn main() {
     println!("{}", ticker);
     println!("QUOTES");
     for quote in hist.quotes().unwrap() {
-        let time = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        let time = OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
     // Display dividends paid during the requested period
     println!("DIVIDENDS");
     for dividend in hist.dividends().unwrap() {
-        let date = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(dividend.date));
+        let date = OffsetDateTime::from_unix_timestamp(dividend.date).unwrap();
         println!("{} | {:.3}", date, dividend.amount);
     }
 }
@@ -40,14 +38,14 @@ fn main() {
     println!("{}", ticker);
     println!("QUOTES");
     for quote in hist.quotes().unwrap() {
-        let time = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        let time = OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
     // Display dividends paid during the requested period
     println!("DIVIDENDS");
     for dividend in hist.dividends().unwrap() {
-        let date = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(dividend.date));
+        let date = OffsetDateTime::from_unix_timestamp(dividend.date).unwrap();
         println!("{} | {:.3}", date, dividend.amount);
     }
 }

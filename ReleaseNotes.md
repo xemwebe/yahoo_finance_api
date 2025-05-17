@@ -1,3 +1,11 @@
+## Release 4.0.0-rc
++ allow negative time stamps for date range before UNIX EPOCH
++ use `rustls` as tls background to avoid problems with API
++ improved support for missing or NaN values
+
+## Release 3.1.0
++ improved ticker info
+
 ## Release 3.0.0
 + improved builder pattern
 + many more fields are now optional

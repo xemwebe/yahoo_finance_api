@@ -33,7 +33,7 @@ pub struct YNewsItem {
     pub publisher: String,
     pub link: String,
     #[serde(rename = "providerPublishTime")]
-    pub provider_publish_time: u64,
+    pub provider_publish_time: i64,
     #[serde(rename = "type")]
     pub newstype: String,
 }
@@ -127,7 +127,7 @@ pub struct YOptionChainResult {
 #[serde(rename_all = "camelCase")]
 pub struct YOptionChainData {
     pub underlying_symbol: String,
-    pub expiration_dates: Vec<u64>,
+    pub expiration_dates: Vec<i64>,
     pub strikes: Vec<f64>,
     pub has_mini_options: bool,
     pub quote: YQuote,
@@ -169,10 +169,10 @@ pub struct YQuote {
     pub fifty_two_week_high_change_percent: f64,
     pub fifty_two_week_low: f64,
     pub fifty_two_week_high: f64,
-    pub dividend_date: u64,
-    pub earnings_timestamp: u64,
-    pub earnings_timestamp_start: u64,
-    pub earnings_timestamp_end: u64,
+    pub dividend_date: i64,
+    pub earnings_timestamp: i64,
+    pub earnings_timestamp_start: i64,
+    pub earnings_timestamp_end: i64,
     pub trailing_annual_dividend_rate: f64,
     #[serde(rename = "trailingPE")]
     pub trailing_pe: f64,
@@ -181,7 +181,7 @@ pub struct YQuote {
     pub eps_forward: f64,
     pub price_hint: u64,
     pub post_market_change_percent: Option<f64>,
-    pub post_market_time: Option<u64>,
+    pub post_market_time: Option<i64>,
     pub post_market_price: Option<f64>,
     pub post_market_change: Option<f64>,
     pub regular_market_change_percent: f64,
@@ -201,9 +201,9 @@ pub struct YQuote {
     pub fifty_two_week_low_change_percent: f64,
     pub fifty_two_week_range: String,
     pub market: String,
-    pub exchange_data_delayed_by: u64,
+    pub exchange_data_delayed_by: i64,
     pub regular_market_price: f64,
-    pub regular_market_time: u64,
+    pub regular_market_time: i64,
     pub regular_market_change: f64,
     pub regular_market_open: f64,
     pub regular_market_day_high: f64,
@@ -216,7 +216,7 @@ pub struct YQuote {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionDetails {
-    pub expiration_date: u64,
+    pub expiration_date: i64,
     pub has_mini_options: bool,
     pub calls: Vec<YOptionContract>,
     pub puts: Vec<YOptionContract>,
@@ -236,8 +236,8 @@ pub struct YOptionContract {
     pub bid: Option<f64>,
     pub ask: Option<f64>,
     pub contract_size: Option<String>,
-    pub expiration: Option<u64>,
-    pub last_trade_date: Option<u64>,
+    pub expiration: Option<i64>,
+    pub last_trade_date: Option<i64>,
     pub implied_volatility: Option<f64>,
     pub in_the_money: Option<bool>,
 }

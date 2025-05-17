@@ -516,4 +516,17 @@ mod tests {
                 || cookie.contains("Secure")
         );
     }
+
+    #[test]
+    fn test_neg_time_stamp() {
+        let start = datetime!(1960-01-01 0:00:00.00 UTC);
+        let end = datetime!(2025-04-30 23:59:59.99 UTC);
+
+        let provider = YahooConnector::new().unwrap();
+        let response = provider.get_quote_history("XOM", start, end).unwrap();
+        let quotes = response.quotes();
+        assert!(!quotes.is_err());
+        let quotes = quotes.unwrap();
+        assert_eq!(quotes.len(), 15939);
+    }
 }

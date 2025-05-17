@@ -1,4 +1,5 @@
-use std::time::{Duration, UNIX_EPOCH};
+#[cfg(not(feature = "blocking"))]
+use std::time::Duration;
 
 use time::macros::datetime;
 use time::OffsetDateTime;
@@ -22,14 +23,14 @@ async fn main() {
     println!("{}", ticker);
     println!("QUOTES");
     for quote in hist.quotes().unwrap() {
-        let time = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        let time = OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
     // Get any splits that occured during the requested period
     println!("SPLITS");
     for split in hist.splits().unwrap() {
-        let date = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(split.date));
+        let date = OffsetDateTime::from_unix_timestamp(split.date).unwrap();
         println!("{} | {} : {}", date, split.numerator, split.denominator);
     }
 }
@@ -47,14 +48,14 @@ fn main() {
     println!("{}", ticker);
     println!("QUOTES");
     for quote in hist.quotes().unwrap() {
-        let time = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        let time = OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
     // Get any splits that occured during the requested period
     println!("SPLITS");
     for split in hist.splits().unwrap() {
-        let date = OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(split.date));
+        let date = OffsetDateTime::from_unix_timestamp(split.date).unwrap();
         println!("{} | {} : {}", date, split.numerator, split.denominator);
     }
 }
