@@ -16,7 +16,6 @@
 # Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use time::OffsetDateTime;
 use tokio_test;
 
@@ -28,7 +27,7 @@ fn main() {
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
-        OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
     println!(\"At {} quote price of Apple was {}\", time, quote.close);
 }
 ```
@@ -95,7 +94,6 @@ returning `None` if the field found missing in the response.
 # Get the latest available quote (with blocking feature enabled):
 ```rust
 use yahoo_finance_api as yahoo;
-use std::time::{Duration, UNIX_EPOCH};
 use time::OffsetDateTime;
 
 fn main() {
@@ -106,7 +104,7 @@ fn main() {
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
-        OffsetDateTime::from(UNIX_EPOCH + Duration::from_secs(quote.timestamp));
+        OffsetDateTime::from_unix_timestamp(quote.timestamp).unwrap();
     println!(\"At {} quote price of Apple was {}\", time, quote.close);
 }
 ```

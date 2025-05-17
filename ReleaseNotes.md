@@ -2,6 +2,7 @@
 + allow negative time stamps for date range before UNIX EPOCH
 + use `rustls` as tls background to avoid problems with API
 + improved support for missing or NaN values
++ remove search for options, since API seems to be discontinued
 
 ## Release 3.1.0
 + improved ticker info

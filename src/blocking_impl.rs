@@ -104,14 +104,6 @@ impl YahooConnector {
         Ok(YSearchResult::from_opt(&result))
     }
 
-    /// Get list for options for a given name
-    pub fn search_options(&self, name: &str) -> Result<YOptionChain, YahooError> {
-        let url = format!("https://query2.finance.yahoo.com/v6/finance/options/{name}");
-        let response = self.client.get(url).send()?.text()?;
-
-        Ok(serde_json::from_str(&response)?)
-    }
-
     // Get symbol metadata
     pub fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
         if let None = &self.crumb {
@@ -464,14 +456,6 @@ mod tests {
         assert_eq!(&result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
         assert!(capital_gains.len() > 0usize);
-    }
-
-    #[test]
-    fn search_options() {
-        let provider = YahooConnector::new().unwrap();
-        let response = provider.search_options("AAPL");
-
-        assert!(response.is_ok());
     }
 
     #[test]
