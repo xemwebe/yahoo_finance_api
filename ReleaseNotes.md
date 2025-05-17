@@ -1,4 +1,4 @@
-## Release 4.0.0-rc
+## Release 4.0.0
 + allow negative time stamps for date range before UNIX EPOCH
 + use `rustls` as tls background to avoid problems with API
 + improved support for missing or NaN values
