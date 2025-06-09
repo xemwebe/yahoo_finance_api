@@ -32,4 +32,6 @@ pub enum YahooError {
     Unauthorized,
     #[error("Invalid crumb")]
     InvalidCrumb,
+    #[error("Too many requests (rate limited by Yahoo) during: {0}")]
+    TooManyRequests(String),
 }
