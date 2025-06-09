@@ -160,7 +160,7 @@ impl YahooConnector {
         Err(YahooError::NoResponse)
     }
 
-    pub fn get_crumb(&mut self) -> Result<String, YahooError> {
+    fn get_crumb(&mut self) -> Result<String, YahooError> {
         if self.cookie.is_none() {
             self.cookie = Some(self.get_cookie()?);
         }
