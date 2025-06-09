@@ -169,20 +169,18 @@ impl YahooConnector {
     }
 
     pub async fn get_crumb(&mut self) -> Result<String, YahooError> {
-        println!("User-Agent: {:?}", self.user_agent);
-
         if self.cookie.is_none() {
             self.cookie = Some(self.get_cookie().await?);
         }
 
-        println!("cookie: {:?}", self.cookie);
-
-        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+        const MAX_RETRIES: usize = 1;
         let crumb_url = reqwest::Url::parse(Y_GET_CRUMB_URL).unwrap();
-        cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
+        let mut last_error = YahooError::NoResponse;
 
-        let max_retries = 1;
-        for attempt in 0..=max_retries {
+        for _attempt in 0..=MAX_RETRIES {
+            let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+            cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
+
             let response = self
                 .create_client(Some(cookie_provider.clone()))
                 .await?
@@ -190,39 +188,38 @@ impl YahooConnector {
                 .send()
                 .await?;
 
-            let status = response.status();
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                return Err(YahooError::TooManyRequests(format!(
+                    "GET {} in get_crumb",
+                    Y_GET_CRUMB_URL
+                )));
+            }
             let crumb = response.text().await?;
             let crumb = crumb.trim();
 
-            println!("get_crumb status: {}, body: {:?}", status, crumb);
-
             if crumb.contains("Invalid Cookie") {
                 self.cookie = Some(self.get_cookie().await?);
-                if attempt == max_retries {
-                    return Err(YahooError::InvalidCookie);
-                } else {
-                    continue;
-                }
+                last_error = YahooError::InvalidCookie;
+                continue;
             }
 
-            if status == reqwest::StatusCode::TOO_MANY_REQUESTS
-                || crumb.contains("Too Many Requests")
-            {
-                if attempt == max_retries {
-                    return Err(YahooError::TooManyRequests(format!(
-                        "GET {} in get_crumb",
-                        Y_GET_CRUMB_URL
-                    )));
-                } else {
-                    continue;
-                }
+            if crumb.contains("Too Many Requests") {
+                last_error =
+                    YahooError::TooManyRequests(format!("GET {} in get_crumb", Y_GET_CRUMB_URL));
+                continue;
+            }
+
+            if crumb.is_empty() {
+                last_error = YahooError::InvalidCrumb;
+                continue;
             }
 
             return Ok(crumb.to_string());
         }
 
-        Err(YahooError::NoResponse)
+        Err(last_error)
     }
+
     async fn get_cookie(&mut self) -> Result<String, YahooError> {
         Ok(self
             .client
