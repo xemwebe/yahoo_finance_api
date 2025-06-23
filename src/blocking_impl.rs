@@ -249,7 +249,26 @@ impl YahooConnector {
     fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         let response = self.client.get(url).send()?.text()?;
 
-        serde_json::from_str::<serde_json::Value>(&response).map_err(YahooError::DeserializeFailed)
+        let json = serde_json::from_str::<serde_json::Value>(&response)
+            .map_err(YahooError::DeserializeFailed);
+
+        if json.is_err() {
+            let trimmed_response = response.trim();
+            if trimmed_response.len() <= 4_000
+                && trimmed_response
+                    .to_lowercase()
+                    .contains("too many requests")
+            {
+                Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
+            } else {
+                #[cfg(feature = "debug")]
+                Err(YahooError::DeserializeFailedDebug(
+                    trimmed_response.to_string(),
+                ))?
+            }
+        }
+
+        json
     }
 }
 

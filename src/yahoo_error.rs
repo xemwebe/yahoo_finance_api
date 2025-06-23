@@ -8,6 +8,10 @@ pub enum YahooError {
     FetchFailed(String),
     #[error("deserializing response from yahoo! finance failed: {0}")]
     DeserializeFailed(#[from] serde_json::Error),
+
+    #[error("deserializing response from yahoo! finance failed, full response body: {0}")]
+    DeserializeFailedDebug(String),
+
     #[error("connection to yahoo! finance server failed: {0}")]
     ConnectionFailed(#[from] reqwest::Error),
     #[error("yahoo! finance returned api error: {0:?}")]

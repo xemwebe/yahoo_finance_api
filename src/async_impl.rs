@@ -258,9 +258,28 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
-        let resp = self.client.get(url).send().await?.text().await?;
+        let response = self.client.get(url).send().await?.text().await?;
 
-        serde_json::from_str::<serde_json::Value>(&resp).map_err(YahooError::DeserializeFailed)
+        let json = serde_json::from_str::<serde_json::Value>(&response)
+            .map_err(YahooError::DeserializeFailed);
+
+        if json.is_err() {
+            let trimmed_response = response.trim();
+            if trimmed_response.len() <= 4_000
+                && trimmed_response
+                    .to_lowercase()
+                    .contains("too many requests")
+            {
+                Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
+            } else {
+                #[cfg(feature = "debug")]
+                Err(YahooError::DeserializeFailedDebug(
+                    trimmed_response.to_string(),
+                ))?
+            }
+        }
+
+        json
     }
 }
 
@@ -416,11 +435,11 @@ mod tests {
     #[test]
     fn test_search_ticker() {
         let provider = YahooConnector::new().unwrap();
-        let resp = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
+        let response = tokio_test::block_on(provider.search_ticker("Apple")).unwrap();
 
-        assert_eq!(resp.count, 15);
+        assert_eq!(response.count, 15);
         let mut apple_found = false;
-        for item in resp.quotes {
+        for item in response.quotes {
             if item.exchange == "NMS" && item.symbol == "AAPL" && item.short_name == "Apple Inc." {
                 apple_found = true;
                 break;
