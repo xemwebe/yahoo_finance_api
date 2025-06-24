@@ -263,7 +263,7 @@ impl YahooConnector {
         let json = serde_json::from_str::<serde_json::Value>(&response)
             .map_err(YahooError::DeserializeFailed);
 
-        if json.is_err() {
+        if let Err(YahooError::DeserializeFailed(ref _e)) = json {
             let trimmed_response = response.trim();
             if trimmed_response.len() <= 4_000
                 && trimmed_response
@@ -273,9 +273,11 @@ impl YahooConnector {
                 Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
             } else {
                 #[cfg(feature = "debug")]
-                Err(YahooError::DeserializeFailedDebug(
-                    trimmed_response.to_string(),
-                ))?
+                if format!("{}", _e.inner()).contains("expected value") {
+                    Err(YahooError::DeserializeFailedDebug(
+                        trimmed_response.to_string(),
+                    ))?
+                }
             }
         }
 
