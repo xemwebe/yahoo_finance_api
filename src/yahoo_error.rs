@@ -38,4 +38,13 @@ pub enum YahooError {
     InvalidCrumb,
     #[error("Too many requests (rate limited by Yahoo) during: {0}")]
     TooManyRequests(String),
+
+    #[error("Invalid URL format")]
+    InvalidUrl,
+
+    #[error("Invalid date format")]
+    InvalidDateFormat,
+
+    #[error("Missing required field: {0}")]
+    MissingField(String),
 }

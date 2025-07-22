@@ -1,3 +1,5 @@
+use crate::quotes::{FinancialEvent, YEarningsResponse, YErrorMessage};
+
 use super::*;
 
 impl YahooConnector {
@@ -114,6 +116,10 @@ impl YahooConnector {
         if self.crumb.is_none() {
             self.crumb = Some(self.get_crumb().await?);
         }
+        if self.cookie.is_none() {
+            self.cookie = Some(self.get_cookie().await?);
+        }
+
         let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
         let url = reqwest::Url::parse(
             &(format!(
@@ -166,6 +172,263 @@ impl YahooConnector {
         }
 
         Err(YahooError::NoResponse)
+    }
+
+    /// Retrieve financial events(Earnings, Meeting, Call) dates for the given ticker with specified limit (max limit: 250),
+    pub async fn get_financial_events(
+        &mut self,
+        ticker: &str,
+        limit: u32,
+    ) -> Result<Vec<FinancialEvent>, YahooError> {
+        if ticker.is_empty() {
+            return Err(YahooError::FetchFailed(
+                "Ticker cannot be empty".to_string(),
+            ));
+        }
+
+        // Ensure we have crumb for authentication
+        if self.crumb.is_none() {
+            self.crumb = Some(self.get_crumb().await?);
+        }
+        if self.cookie.is_none() {
+            self.cookie = Some(self.get_cookie().await?);
+        }
+
+        let url = format!(
+            YEARNINGS_QUERY!(),
+            url = Y_EARNINGS_URL,
+            lang = "en-US",
+            region = "US",
+            crumb = self.crumb.as_ref().unwrap()
+        );
+
+        // Create request body
+        let query_body = serde_json::json!({
+            "size": limit,
+            "query": {
+                "operator": "eq",
+                "operands": ["ticker", ticker]
+            },
+            "sortField": "startdatetime",
+            "sortType": "DESC",
+            "entityIdType": "earnings",
+            "includeFields": [
+                "startdatetime",
+                "timeZoneShortName",
+                "epsestimate",
+                "epsactual",
+                "epssurprisepct",
+                "eventtype"
+            ]
+        });
+
+        // Setup cookie for authenticated request
+        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+        let parsed_url = reqwest::Url::parse(&url).map_err(|_| YahooError::InvalidUrl)?;
+
+        if let Some(cookie) = &self.cookie {
+            cookie_provider.add_cookie_str(cookie, &parsed_url);
+        }
+
+        let max_retries = 1;
+        for attempt in 0..=max_retries {
+            let client = self.create_client(Some(cookie_provider.clone())).await?;
+
+            let response = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .json(&query_body)
+                .send()
+                .await?;
+
+            let status = response.status();
+
+            match status {
+                reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                    return Err(YahooError::TooManyRequests(format!(
+                        "POST {} in get_financial_events for ticker {}",
+                        Y_EARNINGS_URL, ticker
+                    )));
+                }
+                reqwest::StatusCode::UNAUTHORIZED => {
+                    if attempt < max_retries {
+                        self.crumb = Some(self.get_crumb().await?);
+                        continue;
+                    } else {
+                        return Err(YahooError::Unauthorized);
+                    }
+                }
+                reqwest::StatusCode::FORBIDDEN => {
+                    return Err(YahooError::Unauthorized);
+                }
+                reqwest::StatusCode::NOT_FOUND => {
+                    return Err(YahooError::FetchFailed(format!(
+                        "Ticker {} not found",
+                        ticker
+                    )));
+                }
+                _ if !status.is_success() => {
+                    return Err(YahooError::FetchFailed(format!("HTTP error: {}", status)));
+                }
+                _ => {} // Success, continue
+            }
+
+            let text = response.text().await?;
+
+            // Try to parse response
+            match serde_json::from_str::<YEarningsResponse>(&text) {
+                Ok(earnings_response) => {
+                    // Check for API errors
+                    if let Some(error) = &earnings_response.finance.error {
+                        let code = error.get("code").and_then(|v| v.as_str()).unwrap_or("");
+                        let description = error
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+
+                        // If the crumb is invalid, try to refetch it and retry the request
+                        if description.contains("Invalid Crumb") {
+                            if attempt < max_retries {
+                                self.crumb = Some(self.get_crumb().await?); // Refetch crumb
+                                continue; // Go to the next iteration
+                            } else {
+                                return Err(YahooError::InvalidCrumb);
+                            }
+                        }
+
+                        return Err(YahooError::ApiError(YErrorMessage {
+                            code: Some(code.to_string()),
+                            description: Some(description.to_string()),
+                        }));
+                    }
+
+                    return Ok(self.parse_earnings_response(earnings_response)?);
+                }
+                Err(e) => {
+                    // A parsing error is a critical failure unless we are retrying.
+                    if attempt < max_retries {
+                        // It's possible the session expired, let's try refreshing the crumb and cookie.
+                        self.crumb = Some(self.get_crumb().await?);
+                        continue;
+                    } else {
+                        // If parsing fails on the last attempt, return the error.
+                        return Err(YahooError::DeserializeFailed(e));
+                    }
+                }
+            }
+        }
+
+        Err(YahooError::NoResponse)
+    }
+
+    /// Parse earnings response into structured data
+    fn parse_earnings_response(
+        &self,
+        response: YEarningsResponse,
+    ) -> Result<Vec<FinancialEvent>, YahooError> {
+        let mut earnings_events = Vec::new();
+
+        if response.finance.result.is_empty() {
+            return Ok(earnings_events);
+        }
+
+        let result = &response.finance.result[0];
+        if result.documents.is_empty() {
+            return Ok(earnings_events);
+        }
+
+        let document = &result.documents[0];
+
+        if document.columns.is_empty() {
+            return Err(YahooError::DataInconsistency);
+        }
+
+        // Map column names to indices
+        let mut column_map = std::collections::HashMap::new();
+        for (index, column) in document.columns.iter().enumerate() {
+            column_map.insert(column.label.as_str(), index);
+        }
+
+        // Parse each row
+        for row in &document.rows {
+            let earnings_event = self.parse_earnings_row(row, &column_map)?;
+            earnings_events.push(earnings_event);
+        }
+
+        Ok(earnings_events)
+    }
+
+    /// Parse individual earnings row
+    fn parse_earnings_row(
+        &self,
+        row: &[serde_json::Value],
+        column_map: &std::collections::HashMap<&str, usize>,
+    ) -> Result<FinancialEvent, YahooError> {
+        // Extract earnings date
+        let get_value = |col_name: &str| column_map.get(col_name).and_then(|&idx| row.get(idx));
+
+        let earnings_date = match get_value("Event Start Date").and_then(|v| v.as_str()) {
+            Some(date_str) => {
+                OffsetDateTime::parse(date_str, &time::format_description::well_known::Rfc3339)
+                    .or_else(|_| {
+                        OffsetDateTime::parse(
+                            date_str,
+                            &time::format_description::well_known::Iso8601::DEFAULT,
+                        )
+                    })
+                    .map_err(|_| YahooError::InvalidDateFormat)?
+            }
+            None => return Err(YahooError::MissingField("Event Start Date".to_string())),
+        };
+
+        // Extract event type and convert codes
+        let event_type = get_value("Event Type")
+            .map(|v| {
+                if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else if let Some(i) = v.as_i64() {
+                    i.to_string()
+                } else {
+                    "Unknown".to_string()
+                }
+            })
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let event_type = match event_type.as_str() {
+            "1" => "Call".to_string(),
+            "2" => "Earnings".to_string(),
+            "11" => "Meeting".to_string(),
+            other => other.to_string(),
+        };
+        let eps_estimate = get_value("EPS Estimate").and_then(|v| v.as_f64());
+        let reported_eps = get_value("Reported EPS").and_then(|v| v.as_f64());
+        let surprise_percent = get_value("Surprise (%)").and_then(|v| v.as_f64());
+        let timezone = get_value("Timezone short name")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        Ok(FinancialEvent {
+            earnings_date,
+            event_type,
+            eps_estimate,
+            reported_eps,
+            surprise_percent,
+            timezone,
+        })
+    }
+
+    /// Get only earnings events (filter out meetings)
+    pub async fn get_earnings_only(
+        &mut self,
+        ticker: &str,
+        limit: u32,
+    ) -> Result<Vec<FinancialEvent>, YahooError> {
+        let all_events = self.get_financial_events(ticker, limit).await?;
+
+        Ok(all_events
+            .into_iter()
+            .filter(|event| event.event_type == "Earnings")
+            .collect())
     }
 
     async fn get_crumb(&mut self) -> Result<String, YahooError> {
@@ -235,7 +498,7 @@ impl YahooConnector {
     }
 
     async fn create_client(
-        &mut self,
+        &self,
         cookie_provider: Option<Arc<reqwest::cookie::Jar>>,
     ) -> Result<Client, reqwest::Error> {
         let mut client_builder = Client::builder();
@@ -571,5 +834,36 @@ mod tests {
         assert!(!quotes.is_err());
         let quotes = quotes.unwrap();
         assert_eq!(quotes.len(), 15939);
+    }
+
+    #[test]
+    fn test_get_financial_events() {
+        let mut provider = YahooConnector::new().unwrap();
+        let limit = 100;
+
+        let result = tokio_test::block_on(provider.get_financial_events("AAPL", limit));
+
+        if result.is_err() {
+            println!("{:?}", result);
+        }
+
+        assert!(result.is_ok());
+        let earnings = result.unwrap();
+
+        assert_eq!(earnings.len() as u32, limit);
+    }
+
+    #[test]
+    fn test_get_earnings_only() {
+        let mut provider = YahooConnector::new().unwrap();
+        let result = tokio_test::block_on(provider.get_earnings_only("AAPL", 100));
+
+        assert!(result.is_ok());
+        let earnings = result.unwrap();
+
+        // All events should be earnings type
+        for event in &earnings {
+            assert_eq!(event.event_type, "Earnings");
+        }
     }
 }
