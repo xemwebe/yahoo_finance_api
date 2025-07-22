@@ -2,6 +2,7 @@ use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use time::OffsetDateTime;
 
 use super::YahooError;
 
@@ -739,6 +740,44 @@ pub struct FinancialData {
     pub operating_margins: Option<f64>,
     pub profit_margins: Option<f64>,
     pub financial_currency: Option<String>,
+}
+
+// Структуры для earnings dates response
+#[derive(Deserialize, Debug, Clone)]
+pub struct YEarningsResponse {
+    pub finance: YEarningsFinance,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct YEarningsFinance {
+    pub result: Vec<YEarningsResult>,
+    pub error: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct YEarningsResult {
+    pub documents: Vec<YEarningsDocument>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct YEarningsDocument {
+    pub columns: Vec<YEarningsColumn>,
+    pub rows: Vec<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct YEarningsColumn {
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FinancialEvent {
+    pub earnings_date: OffsetDateTime,
+    pub event_type: String,
+    pub eps_estimate: Option<f64>,
+    pub reported_eps: Option<f64>,
+    pub surprise_percent: Option<f64>,
+    pub timezone: Option<String>,
 }
 
 #[cfg(test)]

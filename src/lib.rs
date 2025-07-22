@@ -190,6 +190,7 @@ const YCHART_URL: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
 const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
 const Y_GET_COOKIE_URL: &str = "https://fc.yahoo.com";
 const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb";
+const Y_EARNINGS_URL: &str = "https://query1.finance.yahoo.com/v1/finance/visualization";
 
 // special yahoo hardcoded keys and headers
 const Y_COOKIE_REQUEST_HEADER: &str = "set-cookie";
@@ -225,6 +226,11 @@ macro_rules! YQUOTE_SUMMARY_QUERY {
     () => {
         "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
     }
+}
+macro_rules! YEARNINGS_QUERY {
+    () => {
+        "{url}?lang={lang}&region={region}&crumb={crumb}"
+    };
 }
 
 /// Container for connection parameters to yahoo! finance server
