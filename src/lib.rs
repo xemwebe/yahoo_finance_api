@@ -176,9 +176,9 @@ mod search_result;
 mod yahoo_error;
 pub use quotes::{
     AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
-    ExtendedQuoteSummary, FinancialData, PeriodInfo, Quote, QuoteBlock, QuoteList, QuoteType,
-    Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
-    YSummaryData,
+    ExtendedQuoteSummary, FinancialData, FinancialEvent, PeriodInfo, Quote, QuoteBlock, QuoteList,
+    QuoteType, Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary,
+    YResponse, YSummaryData,
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
