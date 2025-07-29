@@ -1,3 +1,7 @@
+## Relese 4.1.0
++ new method: get_financial_events(ticker, limit) - All financial events
++ new method: get_earnings_only(ticker, limit) - Earnings reports only (filters out meetings)
+
 ## Release 4.0.0
 + allow negative time stamps for date range before UNIX EPOCH
 + use `rustls` as tls background to avoid problems with API
