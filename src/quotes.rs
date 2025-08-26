@@ -1,5 +1,6 @@
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 use std::fmt;
 use time::OffsetDateTime;
@@ -20,7 +21,7 @@ pub mod decimal {
 
 pub use decimal::*;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct YResponse {
     pub chart: YChart,
 }
@@ -184,13 +185,13 @@ pub struct Quote {
     pub adjclose: Decimal,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct YChart {
     pub result: Option<Vec<YQuoteBlock>>,
     pub error: Option<YErrorMessage>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default, Serialize)]
 pub struct YQuoteBlock {
     pub meta: YMetaData,
     pub timestamp: Option<Vec<i64>>,
@@ -198,7 +199,7 @@ pub struct YQuoteBlock {
     pub indicators: QuoteBlock,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YMetaData {
     pub currency: Option<String>,
@@ -234,7 +235,7 @@ pub struct YMetaData {
     pub valid_ranges: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TradingPeriods {
     pub pre: Option<Vec<Vec<PeriodInfo>>>,
     pub regular: Option<Vec<Vec<PeriodInfo>>>,
@@ -317,14 +318,14 @@ impl<'de> Deserialize<'de> for TradingPeriods {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Default, Clone, Serialize)]
 pub struct CurrentTradingPeriod {
     pub pre: PeriodInfo,
     pub regular: PeriodInfo,
     pub post: PeriodInfo,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct PeriodInfo {
     pub timezone: String,
     pub start: u32,
@@ -332,7 +333,7 @@ pub struct PeriodInfo {
     pub gmtoffset: i32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default, Serialize)]
 pub struct QuoteBlock {
     quote: Vec<QuoteList>,
     #[serde(default)]
@@ -393,12 +394,12 @@ impl QuoteBlock {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct AdjClose {
     adjclose: Option<Vec<Option<Decimal>>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct QuoteList {
     pub volume: Option<Vec<Option<u64>>>,
     pub high: Option<Vec<Option<Decimal>>>,
@@ -407,7 +408,7 @@ pub struct QuoteList {
     pub open: Option<Vec<Option<Decimal>>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct EventsBlock {
     pub splits: Option<HashMap<i64, Split>>,
     pub dividends: Option<HashMap<i64, Dividend>>,
@@ -416,7 +417,7 @@ pub struct EventsBlock {
 }
 
 /// This structure simply models a split that has occured.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct Split {
     /// This is the date (timestamp) when the split occured
     pub date: i64,
@@ -436,7 +437,7 @@ pub struct Split {
 }
 
 /// This structure simply models a dividend which has been recorded.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct Dividend {
     /// This is the price of the dividend
     pub amount: Decimal,
@@ -445,7 +446,7 @@ pub struct Dividend {
 }
 
 /// This structure simply models a capital gain which has been recorded.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct CapitalGain {
     /// This is the amount of capital gain distributed by the fund
     pub amount: f64,
@@ -453,7 +454,7 @@ pub struct CapitalGain {
     pub date: i64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuoteSummary {
     #[serde(rename = "quoteSummary")]
@@ -461,19 +462,19 @@ pub struct YQuoteSummary {
     pub finance: Option<YFinance>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct YFinance {
     pub result: Option<serde_json::Value>,
     pub error: Option<YErrorMessage>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct YErrorMessage {
     pub code: Option<String>,
     pub description: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct ExtendedQuoteSummary {
     pub result: Option<Vec<YSummaryData>>,
     pub error: Option<YErrorMessage>,
@@ -485,7 +486,7 @@ impl YQuoteSummary {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YSummaryData {
     pub asset_profile: Option<AssetProfile>,
@@ -495,7 +496,7 @@ pub struct YSummaryData {
     pub financial_data: Option<FinancialData>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetProfile {
     pub address1: Option<String>,
@@ -521,7 +522,7 @@ pub struct AssetProfile {
     pub max_age: Option<u32>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanyOfficer {
     pub name: String,
@@ -532,7 +533,7 @@ pub struct CompanyOfficer {
     pub total_pay: Option<ValueWrapper>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValueWrapper {
     pub raw: Option<i64>,
@@ -565,7 +566,7 @@ where
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryDetail {
     pub max_age: Option<i64>,
@@ -634,7 +635,7 @@ pub struct SummaryDetail {
     pub open_interest: Option<Decimal>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DefaultKeyStatistics {
     pub max_age: Option<i64>,
@@ -687,7 +688,7 @@ pub struct DefaultKeyStatistics {
     pub lead_investor: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuoteType {
     pub exchange: Option<String>,
@@ -707,7 +708,7 @@ pub struct QuoteType {
     pub max_age: Option<i64>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FinancialData {
     pub max_age: Option<i64>,
@@ -743,35 +744,38 @@ pub struct FinancialData {
 }
 
 // Структуры для earnings dates response
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsResponse {
     pub finance: YEarningsFinance,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsFinance {
     pub result: Vec<YEarningsResult>,
     pub error: Option<serde_json::Value>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsResult {
     pub documents: Vec<YEarningsDocument>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsDocument {
     pub columns: Vec<YEarningsColumn>,
     pub rows: Vec<Vec<serde_json::Value>>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsColumn {
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FinancialEvent {
+    // Custom serialization logic
+    #[serde_as(as = "DisplayFromStr")]
     pub earnings_date: OffsetDateTime,
     pub event_type: String,
     pub eps_estimate: Option<f64>,
@@ -779,6 +783,8 @@ pub struct FinancialEvent {
     pub surprise_percent: Option<f64>,
     pub timezone: Option<String>,
 }
+
+// Implement serde_date_format
 
 #[cfg(test)]
 mod tests {
@@ -953,5 +959,97 @@ mod tests {
 
         let json_data = r#"{ }"#;
         let _: MyStruct = serde_json::from_str(json_data).unwrap();
+    }
+
+    #[test]
+    fn test_yresponse_serde() {
+        let yr: YResponse = YResponse {
+            chart: YChart {
+                result: Some(vec![YQuoteBlock {
+                    meta: YMetaData {
+                        currency: Some("USD".to_string()),
+                        symbol: "AAPL".to_string(),
+                        long_name: Some("Apple Inc.".to_string()),
+                        short_name: Some("AAPL".to_string()),
+                        instrument_type: "EQUITY".to_string(),
+                        exchange_name: "NASDAQ".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }]),
+                error: None,
+            },
+        };
+        let s = serde_json::to_string_pretty(&yr).unwrap();
+        println!("{}", s);
+        let expected = r#"{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "USD",
+          "symbol": "AAPL",
+          "longName": "Apple Inc.",
+          "shortName": "AAPL",
+          "instrumentType": "EQUITY",
+          "exchangeName": "NASDAQ",
+          "fullExchangeName": "",
+          "firstTradeDate": null,
+          "regularMarketTime": null,
+          "gmtoffset": 0,
+          "timezone": "",
+          "exchangeTimezoneName": "",
+          "regularMarketPrice": null,
+          "chartPreviousClose": null,
+          "previousClose": null,
+          "hasPrePostMarketData": false,
+          "fiftyTwoWeekHigh": null,
+          "fiftyTwoWeekLow": null,
+          "regularMarketDayHigh": null,
+          "regularMarketDayLow": null,
+          "regularMarketVolume": null,
+          "scale": null,
+          "priceHint": 0,
+          "currentTradingPeriod": {
+            "pre": {
+              "timezone": "",
+              "start": 0,
+              "end": 0,
+              "gmtoffset": 0
+            },
+            "regular": {
+              "timezone": "",
+              "start": 0,
+              "end": 0,
+              "gmtoffset": 0
+            },
+            "post": {
+              "timezone": "",
+              "start": 0,
+              "end": 0,
+              "gmtoffset": 0
+            }
+          },
+          "tradingPeriods": {
+            "pre": null,
+            "regular": null,
+            "post": null
+          },
+          "dataGranularity": "",
+          "range": "",
+          "validRanges": []
+        },
+        "timestamp": null,
+        "events": null,
+        "indicators": {
+          "quote": [],
+          "adjclose": null
+        }
+      }
+    ],
+    "error": null
+  }
+}"#;
+        assert_eq!(s, expected);
     }
 }

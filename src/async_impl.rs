@@ -867,5 +867,10 @@ mod tests {
         for event in &earnings {
             assert_eq!(event.event_type, "Earnings");
         }
+        let ser = serde_json::to_string(&earnings).unwrap();
+        // Validating the entire string structure is brittle, so just check for key parts
+        assert!(ser.starts_with("[{\"earnings_date\":\""));
+        assert!(ser.contains("\"event_type\":\"Earnings\""));
+        assert!(ser.contains("\"eps_estimate\":"));
     }
 }
