@@ -1,3 +1,8 @@
+## Release 4.1.1
++ security update for dependencies
++ update to reqwest 13.4 and thiserror 2.0
++ test_mutual_fund_capital_gains set to ignore since yahou seems to have disabled or change the API with respect to capital gains
+
 ## Relese 4.1.0
 + new method: get_financial_events(ticker, limit) - All financial events
 + new method: get_earnings_only(ticker, limit) - Earnings reports only (filters out meetings)

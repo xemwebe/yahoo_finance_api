@@ -2073,7 +2073,7 @@ dependencies = [
 
 [[package]]
 name = "yahoo_finance_api"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "reqwest",
  "rust_decimal",

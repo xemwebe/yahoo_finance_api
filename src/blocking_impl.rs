@@ -739,6 +739,7 @@ mod tests {
         assert_eq!(&result[0].meta.data_granularity, "1d");
     }
 
+    #[ignore]
     #[test]
     fn test_mutual_fund_capital_gains() {
         let provider = YahooConnector::new().unwrap();
