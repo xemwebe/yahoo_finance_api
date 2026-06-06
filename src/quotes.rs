@@ -610,6 +610,8 @@ pub struct SummaryDetail {
     pub bid_size: Option<i64>,
     pub ask_size: Option<i64>,
     pub market_cap: Option<u64>,
+    #[serde(rename = "yield")]
+    pub _yield: Option<f64>,
     pub fifty_two_week_low: Option<f64>,
     pub fifty_two_week_high: Option<f64>,
     #[serde(
@@ -686,6 +688,8 @@ pub struct DefaultKeyStatistics {
     pub last_dividend_date: Option<i64>,
     pub latest_share_class: Option<String>,
     pub lead_investor: Option<String>,
+    #[serde(rename = "yield")]
+    pub _yield: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -959,6 +963,21 @@ mod tests {
 
         let json_data = r#"{ }"#;
         let _: MyStruct = serde_json::from_str(json_data).unwrap();
+    }
+
+    #[test]
+    fn test_deserialize_yield_field_in_summary_detail_and_default_key_statistics() {
+        let summary_json = r#"{
+            "yield": 0.42
+        }"#;
+        let summary: SummaryDetail = serde_json::from_str(summary_json).unwrap();
+        assert_eq!(summary._yield, Some(0.42));
+
+        let stats_json = r#"{
+            "yield": 1.23
+        }"#;
+        let stats: DefaultKeyStatistics = serde_json::from_str(stats_json).unwrap();
+        assert_eq!(stats._yield, Some(1.23));
     }
 
     #[test]
