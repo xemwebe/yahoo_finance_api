@@ -307,6 +307,7 @@ impl YahooConnectorBuilder {
         if let Some(proxy) = &self.proxy {
             self.inner = self.inner.proxy(proxy.clone());
         }
+        self.inner = self.inner.https_only(true);
 
         Ok(YahooConnector {
             client: self.inner.build()?,

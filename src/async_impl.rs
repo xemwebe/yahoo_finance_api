@@ -120,21 +120,22 @@ impl YahooConnector {
             self.cookie = Some(self.get_cookie().await?);
         }
 
-        let url = reqwest::Url::parse(
-            &(format!(
-                YQUOTE_SUMMARY_QUERY!(),
-                symbol = symbol,
-                crumb = self.crumb.as_ref().unwrap()
-            )),
-        );
-
         let max_retries = 1;
         for i in 0..=max_retries {
+            // Build URL inside loop to use fresh crumb after refresh
+            let url = reqwest::Url::parse(
+                &(format!(
+                    YQUOTE_SUMMARY_QUERY!(),
+                    symbol = symbol,
+                    crumb = self.crumb.as_ref().unwrap()
+                )),
+            );
+
             let text = self
                 .create_client()
                 .await?
-                .get(url.clone().unwrap())
-                .header("Cookie", self.cookie.clone().unwrap_or_default())
+                .get(url.unwrap())
+                .header("Cookie", self.cookie_header_value())
                 .send()
                 .await?
                 .text()
@@ -223,11 +224,20 @@ impl YahooConnector {
         // Setup cookie for authenticated request
         let max_retries = 1;
         for attempt in 0..=max_retries {
+            // Build URL inside loop to use fresh crumb after refresh
+            let url = format!(
+                YEARNINGS_QUERY!(),
+                url = Y_EARNINGS_URL,
+                lang = "en-US",
+                region = "US",
+                crumb = self.crumb.as_ref().unwrap()
+            );
+
             let client = self.create_client().await?;
 
             let response = client
                 .post(&url)
-                .header("Cookie", self.cookie.clone().unwrap_or_default())
+                .header("Cookie", self.cookie_header_value())
                 .header("Content-Type", "application/json")
                 .json(&query_body)
                 .send()
@@ -437,7 +447,7 @@ impl YahooConnector {
                 .create_client()
                 .await?
                 .get(crumb_url.clone())
-                .header("Cookie", self.cookie.clone().unwrap_or_default())
+                .header("Cookie", self.cookie_header_value())
                 .send()
                 .await?;
 
@@ -491,6 +501,19 @@ impl YahooConnector {
     /// Cookie is added via request-level header instead of client-level cookie_provider.
     async fn create_client(&self) -> Result<Client, reqwest::Error> {
         Ok(self.client.clone())
+    }
+
+    /// Strip Set-Cookie attributes (expires, path, domain, etc.) from raw cookie string.
+    /// Returns only the name=value pairs suitable for Cookie header.
+    fn cookie_header_value(&self) -> String {
+        self.cookie
+            .as_ref()
+            .map(|c| {
+                // Raw Set-Cookie: "A3=dcookie; expires=...; path=/; domain=.yahoo.com"
+                // Cookie header needs only: "A3=dcookie"
+                c.split(';').next().unwrap_or(c).trim().to_string()
+            })
+            .unwrap_or_default()
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value
