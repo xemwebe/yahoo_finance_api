@@ -157,7 +157,6 @@ fn main() {
 #[cfg(feature = "debug")]
 extern crate serde_json_path_to_error as serde_json;
 
-use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
 
@@ -238,9 +237,6 @@ pub struct YahooConnector {
     client: Client,
     url: &'static str,
     search_url: &'static str,
-    timeout: Option<Duration>,
-    user_agent: Option<String>,
-    proxy: Option<Proxy>,
     cookie: Option<String>,
     crumb: Option<String>,
 }
@@ -275,9 +271,6 @@ impl YahooConnector {
             client: Client::default(),
             url: YCHART_URL,
             search_url: YSEARCH_URL,
-            timeout: None,
-            user_agent: Some(USER_AGENT.to_string()),
-            proxy: None,
             cookie: None,
             crumb: None,
         }
@@ -317,9 +310,6 @@ impl YahooConnectorBuilder {
 
         Ok(YahooConnector {
             client: self.inner.build()?,
-            timeout: self.timeout,
-            user_agent: self.user_agent,
-            proxy: self.proxy,
             ..YahooConnector::default_internal()
         })
     }
@@ -327,9 +317,6 @@ impl YahooConnectorBuilder {
     pub fn build_with_client(self, client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
-            timeout: self.timeout,
-            user_agent: self.user_agent,
-            proxy: self.proxy,
             ..YahooConnector::default_internal()
         })
     }
