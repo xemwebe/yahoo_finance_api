@@ -324,9 +324,12 @@ impl YahooConnectorBuilder {
         })
     }
 
-    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
+    pub fn build_with_client(self, client: Client) -> Result<YahooConnector, YahooError> {
         Ok(YahooConnector {
             client,
+            timeout: self.timeout,
+            user_agent: self.user_agent,
+            proxy: self.proxy,
             ..YahooConnector::default_internal()
         })
     }

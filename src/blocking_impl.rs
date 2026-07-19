@@ -110,7 +110,6 @@ impl YahooConnector {
         if self.crumb.is_none() {
             self.crumb = Some(self.get_crumb()?);
         }
-        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
         let url = reqwest::Url::parse(
             &(format!(
                 YQUOTE_SUMMARY_QUERY!(),
@@ -119,13 +118,12 @@ impl YahooConnector {
             )),
         );
 
-        cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &url.clone().unwrap());
-
         let max_retries = 1;
         for i in 0..=max_retries {
             let text = self
-                .create_client(Some(cookie_provider.clone()))?
+                .create_client()?
                 .get(url.clone().unwrap())
+                .header("Cookie", self.cookie.clone().unwrap_or_default())
                 .send()?
                 .text()?;
 
@@ -210,19 +208,13 @@ impl YahooConnector {
         });
 
         // Setup cookie for authenticated request
-        let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-        let parsed_url = reqwest::Url::parse(&url).map_err(|_| YahooError::InvalidUrl)?;
-
-        if let Some(cookie) = &self.cookie {
-            cookie_provider.add_cookie_str(cookie, &parsed_url);
-        }
-
         let max_retries = 1;
         for attempt in 0..=max_retries {
-            let client = self.create_client(Some(cookie_provider.clone()))?;
+            let client = self.create_client()?;
 
             let response = client
                 .post(&url)
+                .header("Cookie", self.cookie.clone().unwrap_or_default())
                 .header("Content-Type", "application/json")
                 .json(&query_body)
                 .send()?;
@@ -426,12 +418,10 @@ impl YahooConnector {
         let mut last_error = YahooError::NoResponse;
 
         for _attempt in 0..=MAX_RETRIES {
-            let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-            cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
-
             let response = self
-                .create_client(Some(cookie_provider.clone()))?
+                .create_client()?
                 .get(crumb_url.clone())
+                .header("Cookie", self.cookie.clone().unwrap_or_default())
                 .send()?;
 
             if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -479,26 +469,10 @@ impl YahooConnector {
             .to_string())
     }
 
-    fn create_client(
-        &mut self,
-        cookie_provider: Option<Arc<reqwest::cookie::Jar>>,
-    ) -> Result<Client, reqwest::Error> {
-        let mut client_builder = Client::builder();
-
-        if let Some(cookie_provider) = cookie_provider {
-            client_builder = client_builder.cookie_provider(cookie_provider);
-        }
-        if let Some(timeout) = &self.timeout {
-            client_builder = client_builder.timeout(*timeout);
-        }
-        if let Some(user_agent) = &self.user_agent {
-            client_builder = client_builder.user_agent(user_agent.clone());
-        }
-        if let Some(proxy) = &self.proxy {
-            client_builder = client_builder.proxy(proxy.clone());
-        }
-
-        client_builder.build()
+    /// Clone the existing client (already has proxy, timeout, user_agent).
+    /// Cookie is added via request-level header instead of client-level cookie_provider.
+    fn create_client(&mut self) -> Result<Client, reqwest::Error> {
+        Ok(self.client.clone())
     }
 
     /// Send request to yahoo! finance server and transform response to JSON value
