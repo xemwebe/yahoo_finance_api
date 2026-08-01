@@ -1,0 +1,20 @@
+{
+	"name": "Yahoo Finance API",
+	// https://github.com/devcontainers/images/tree/4f60ce02680a62c17a7f4524e28fa25446856242/src/rust
+	"image": "mcr.microsoft.com/devcontainers/base:3-ubuntu26.04",
+	"features": {
+		"ghcr.io/devcontainers/features/rust:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				// Rust LSP
+				"rust-lang.rust-analyzer",
+				// Debugger
+				"vadimcn.vscode-lldb",
+				// TOML LSP
+				"tamasfe.even-better-toml"
+			]
+		}
+	}
+}
