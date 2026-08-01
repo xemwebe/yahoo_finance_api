@@ -143,3 +143,7 @@ User @satvikpendem, here is a list of supported quote intervals for a given rang
 |  10y   | 1d, 1wk, 1mo, 3mo |
 |  ytd   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
 |  max   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+
+# Contributing
+
+Interested in contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
