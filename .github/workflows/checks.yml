@@ -1,0 +1,53 @@
+name: Checks
+run-name: Checks (${{ github.event_name }})
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: cargo build --verbose --all-features
+
+  test:
+    name: Test
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run tests
+        run: cargo test --verbose --all-features
+
+  format:
+    name: Format
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check formatting
+        run: cargo fmt --check --all
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  examples:
+    name: Examples
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check examples
+        run: cargo check --examples --all-features
