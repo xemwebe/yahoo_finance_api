@@ -3,6 +3,13 @@ use crate::quotes::{FinancialEvent, YEarningsResponse, YErrorMessage};
 use super::*;
 
 impl YahooConnector {
+    #[cfg(feature = "governor")]
+    async fn wait_for_rate_limit(&self) {
+        if let Some(limiter) = &self.rate_limiter {
+            limiter.until_ready().await;
+        }
+    }
+
     /// Retrieve the quotes of the last day for the given ticker
     pub async fn get_latest_quotes(
         &self,
@@ -133,6 +140,8 @@ impl YahooConnector {
 
         let max_retries = 1;
         for i in 0..=max_retries {
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit().await;
             let text = self
                 .create_client(Some(cookie_provider.clone()))
                 .await?
@@ -232,6 +241,8 @@ impl YahooConnector {
 
         let max_retries = 1;
         for attempt in 0..=max_retries {
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit().await;
             let client = self.create_client(Some(cookie_provider.clone())).await?;
 
             let response = client
@@ -444,6 +455,9 @@ impl YahooConnector {
             let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
             cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
 
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit().await;
+
             let response = self
                 .create_client(Some(cookie_provider.clone()))
                 .await?
@@ -484,6 +498,8 @@ impl YahooConnector {
     }
 
     async fn get_cookie(&mut self) -> Result<String, YahooError> {
+        #[cfg(feature = "governor")]
+        self.wait_for_rate_limit().await;
         Ok(self
             .client
             .get(Y_GET_COOKIE_URL)
@@ -521,6 +537,8 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
+        #[cfg(feature = "governor")]
+        self.wait_for_rate_limit().await;
         let response = self.client.get(url).send().await?.text().await?;
 
         let json = serde_json::from_str::<serde_json::Value>(&response)
@@ -873,5 +891,134 @@ mod tests {
         assert!(ser.starts_with("[{\"earnings_date\":\""));
         assert!(ser.contains("\"event_type\":\"Earnings\""));
         assert!(ser.contains("\"eps_estimate\":"));
+    }
+
+    #[cfg(feature = "governor")]
+    #[test]
+    fn test_governor_builder_options() {
+        use std::num::NonZeroU32;
+
+        let provider_default = YahooConnector::new().unwrap();
+        assert!(provider_default.rate_limiter.is_some());
+
+        let provider_custom = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(5).unwrap()))
+            .build()
+            .unwrap();
+        assert!(provider_custom.rate_limiter.is_some());
+
+        let provider_disabled = YahooConnector::builder()
+            .rate_limit(None)
+            .build()
+            .unwrap();
+        assert!(provider_disabled.rate_limiter.is_none());
+
+        let client = reqwest::Client::new();
+        let provider_with_client = YahooConnectorBuilder::build_with_client(client).unwrap();
+        assert!(provider_with_client.rate_limiter.is_some());
+    }
+
+    #[cfg(feature = "governor")]
+    #[tokio::test]
+    async fn test_governor_throttling() {
+        use std::num::NonZeroU32;
+        use std::time::Instant;
+
+        // 2 requests per second means ~500ms interval between tokens, burst of 2
+        let provider = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(2).unwrap()))
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        // First two requests consume the burst capacity of 2
+        provider.wait_for_rate_limit().await;
+        provider.wait_for_rate_limit().await;
+        let initial_elapsed = start.elapsed();
+
+        // Third request must wait for the next token (~500ms)
+        provider.wait_for_rate_limit().await;
+        let total_elapsed = start.elapsed();
+
+        assert!(initial_elapsed.as_millis() < 100);
+        assert!(total_elapsed.as_millis() >= 400);
+    }
+
+    #[cfg(feature = "governor")]
+    #[tokio::test]
+    async fn test_governor_exact_rate_5_req_per_sec() {
+        use std::num::NonZeroU32;
+        use std::time::Instant;
+
+        // 5 req/sec -> 200ms per request after initial burst of 5
+        let provider = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(5).unwrap()))
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        // Send 8 requests: 5 burst + 3 * 200ms = 600ms total expected delay
+        for _ in 0..8 {
+            provider.wait_for_rate_limit().await;
+        }
+        let elapsed = start.elapsed();
+
+        println!("5 req/sec test for 8 requests took {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() >= 550 && elapsed.as_millis() <= 850,
+            "Expected 8 requests at 5 req/sec to take ~600ms, but took {}ms",
+            elapsed.as_millis()
+        );
+    }
+
+    #[cfg(feature = "governor")]
+    #[tokio::test]
+    async fn test_governor_exact_rate_10_req_per_sec() {
+        use std::num::NonZeroU32;
+        use std::time::Instant;
+
+        // 10 req/sec -> 100ms per request after initial burst of 10
+        let provider = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(10).unwrap()))
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        // Send 15 requests: 10 burst + 5 * 100ms = 500ms total expected delay
+        for _ in 0..15 {
+            provider.wait_for_rate_limit().await;
+        }
+        let elapsed = start.elapsed();
+
+        println!("10 req/sec test for 15 requests took {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() >= 450 && elapsed.as_millis() <= 750,
+            "Expected 15 requests at 10 req/sec to take ~500ms, but took {}ms",
+            elapsed.as_millis()
+        );
+    }
+
+    #[cfg(feature = "governor")]
+    #[tokio::test]
+    async fn test_governor_disabled_no_delay() {
+        use std::time::Instant;
+
+        // Rate limit explicitly set to None (disabled)
+        let provider = YahooConnector::builder()
+            .rate_limit(None)
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        for _ in 0..20 {
+            provider.wait_for_rate_limit().await;
+        }
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 50,
+            "Disabled rate limit took {}ms for 20 requests, expected <50ms",
+            elapsed.as_millis()
+        );
     }
 }
