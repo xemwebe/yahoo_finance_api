@@ -309,7 +309,7 @@ impl YahooConnector {
                         }));
                     }
 
-                    return Ok(self.parse_earnings_response(earnings_response)?);
+                    return self.parse_earnings_response(earnings_response);
                 }
                 Err(e) => {
                     // A parsing error is a critical failure unless we are retrying.
@@ -681,7 +681,7 @@ mod tests {
         let interval = "5m";
 
         let response = provider
-            .get_quote_period_interval("AAPL", &range, &interval, true)
+            .get_quote_period_interval("AAPL", range, interval, true)
             .unwrap();
 
         let metadata = response.metadata().unwrap();
@@ -695,7 +695,7 @@ mod tests {
         let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
         let quotes = response.quotes().unwrap();
-        assert!(quotes.len() > 0usize);
+        assert!(!quotes.is_empty());
     }
 
     #[test]
@@ -722,8 +722,7 @@ mod tests {
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
         let response = provider.get_quote_history("VTSAX", start, end);
-        if response.is_ok() {
-            let response = response.unwrap();
+        if let Ok(response) = response {
             let result = &response.chart.result.as_ref().unwrap();
 
             assert_eq!(result[0].timestamp.as_ref().unwrap().len(), 21);
@@ -778,7 +777,7 @@ mod tests {
         assert_eq!(&result[0].meta.range, "5y");
         assert_eq!(&result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
-        assert!(capital_gains.len() > 0usize);
+        assert!(!capital_gains.is_empty());
     }
 
     #[test]
