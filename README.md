@@ -8,6 +8,38 @@ Therefore, the functions need to be called from within another ```async``` funct
 
 Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version" = "1.0", features = ["blocking"]}`.
 
+# Optional Rate Limiting (Governor)
+
+To prevent overwhelming the Yahoo! Finance API and avoid getting rate-limited (HTTP 429), you can enable the optional `governor` feature. This integrates a sliding-window rate limiter.
+
+In your `Cargo.toml`:
+```toml
+yahoo_finance_api = { version = "4.2", features = ["governor"] }
+```
+
+When enabled, the `YahooConnector` will default to a limit of **10 requests per second**. You can override this limit, or explicitly disable it at runtime using the builder:
+
+```rust
+use yahoo_finance_api as yahoo;
+use std::num::NonZeroU32;
+
+fn main() {
+    // 1. Default (10 requests/sec when `governor` feature is active)
+    let provider = yahoo::YahooConnector::new().unwrap();
+
+    // 2. Custom limit (e.g. 5 requests/sec)
+    let provider = yahoo::YahooConnector::builder()
+        .rate_limit(Some(NonZeroU32::new(5).unwrap()))
+        .build().unwrap();
+
+    // 3. Explicitly disable rate limiter even when `governor` feature is compiled in
+    let provider = yahoo::YahooConnector::builder()
+        .rate_limit(None)
+        .build().unwrap();
+}
+```
+The rate limiter applies proactively, meaning the library will wait (or block in blocking mode) before sending the request rather than returning a rate limit error.
+
 # Get the latest available quote:
 ```rust
 use yahoo_finance_api as yahoo;
