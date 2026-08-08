@@ -141,17 +141,17 @@ impl YahooConnector {
                 )),
             );
 
-            let text = self
+            let response = self
                 .create_client()
                 .await?
                 .get(url.unwrap())
                 .header("Cookie", self.cookie_header_value())
                 .send()
-                .await?
-                .text()
                 .await?;
+            let status = response.status();
+            let text = response.text().await?;
 
-            let result: YQuoteSummary = serde_json::from_str(&text)?;
+            let result: YQuoteSummary = crate::response::decode_body(text, status, &format!("get_ticker_info: {}", symbol)).and_then(YQuoteSummary::from_json)?;
 
             if let Some(finance) = &result.finance {
                 if let Some(error) = &finance.error {
@@ -530,30 +530,10 @@ impl YahooConnector {
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         #[cfg(feature = "governor")]
         self.wait_for_rate_limit().await;
-        let response = self.client.get(url).send().await?.text().await?;
-
-        let json = serde_json::from_str::<serde_json::Value>(&response)
-            .map_err(YahooError::DeserializeFailed);
-
-        if let Err(YahooError::DeserializeFailed(ref _e)) = json {
-            let trimmed_response = response.trim();
-            if trimmed_response.len() <= 4_000
-                && trimmed_response
-                    .to_lowercase()
-                    .contains("too many requests")
-            {
-                Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
-            } else {
-                #[cfg(feature = "debug")]
-                if format!("{}", _e.inner()).contains("expected value") {
-                    Err(YahooError::DeserializeFailedDebug(
-                        trimmed_response.to_string(),
-                    ))?
-                }
-            }
-        }
-
-        json
+        let response = self.client.get(url).send().await?;
+        let status = response.status();
+        let text = response.text().await?;
+        crate::response::decode_body(text, status, url)
     }
 }
 

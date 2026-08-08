@@ -145,14 +145,15 @@ impl YahooConnector {
                 )),
             );
 
-            let text = self
+            let response = self
                 .create_client()?
                 .get(url.unwrap())
                 .header("Cookie", self.cookie_header_value())
-                .send()?
-                .text()?;
+                .send()?;
+            let status = response.status();
+            let text = response.text()?;
 
-            let result: YQuoteSummary = serde_json::from_str(&text)?;
+            let result: YQuoteSummary = crate::response::decode_body(text, status, &format!("get_ticker_info: {}", symbol)).and_then(YQuoteSummary::from_json)?;
 
             if let Some(finance) = &result.finance {
                 if let Some(error) = &finance.error {
@@ -522,30 +523,10 @@ impl YahooConnector {
     fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         #[cfg(feature = "governor")]
         self.wait_for_rate_limit_blocking();
-        let response = self.client.get(url).send()?.text()?;
-
-        let json = serde_json::from_str::<serde_json::Value>(&response)
-            .map_err(YahooError::DeserializeFailed);
-
-        if let Err(YahooError::DeserializeFailed(ref _e)) = json {
-            let trimmed_response = response.trim();
-            if trimmed_response.len() <= 4_000
-                && trimmed_response
-                    .to_lowercase()
-                    .contains("too many requests")
-            {
-                Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
-            } else {
-                #[cfg(feature = "debug")]
-                if format!("{}", _e.inner()).contains("expected value") {
-                    Err(YahooError::DeserializeFailedDebug(
-                        trimmed_response.to_string(),
-                    ))?
-                }
-            }
-        }
-
-        json
+        let response = self.client.get(url).send()?;
+        let status = response.status();
+        let text = response.text()?;
+        crate::response::decode_body(text, status, url)
     }
 }
 

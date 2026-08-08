@@ -185,6 +185,7 @@ pub use quotes::decimal::Decimal;
 pub use time;
 
 mod quotes;
+mod response;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{

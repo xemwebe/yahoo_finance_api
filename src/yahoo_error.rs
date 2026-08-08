@@ -12,6 +12,12 @@ pub enum YahooError {
     #[error("deserializing response from yahoo! finance failed, full response body: {0}")]
     DeserializeFailedDebug(String),
 
+    #[error("yahoo! finance returned an empty response body")]
+    EmptyResponse,
+
+    #[error("yahoo! finance returned a non-JSON (HTML) response body")]
+    HtmlResponse,
+
     #[error("connection to yahoo! finance server failed: {0}")]
     ConnectionFailed(#[from] reqwest::Error),
     #[error("yahoo! finance returned api error: {0:?}")]
