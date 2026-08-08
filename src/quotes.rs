@@ -396,16 +396,84 @@ impl QuoteBlock {
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct AdjClose {
+    #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     adjclose: Option<Vec<Option<Decimal>>>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct QuoteList {
     pub volume: Option<Vec<Option<u64>>>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub high: Option<Vec<Option<Decimal>>>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub close: Option<Vec<Option<Decimal>>>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub low: Option<Vec<Option<Decimal>>>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub open: Option<Vec<Option<Decimal>>>,
+}
+
+/// Yahoo sometimes returns `"Infinity"`, `"-Infinity"` or `"NaN"` as string
+/// values inside price series (e.g. adjclose). Instead of failing the whole
+/// response, such elements are converted to `None` so the series length stays
+/// aligned and the remaining bars are not lost.
+fn is_special_float_string(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    lower == "infinity" || lower == "+infinity" || lower == "-infinity" || lower == "nan"
+}
+
+#[cfg(not(feature = "decimal"))]
+fn json_value_to_decimal(value: &serde_json::Value) -> Option<Decimal> {
+    match value {
+        serde_json::Value::String(s) if is_special_float_string(s) => None,
+        serde_json::Value::Number(n) => n.as_f64(),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "decimal")]
+fn json_value_to_decimal(value: &serde_json::Value) -> Option<Decimal> {
+    use std::str::FromStr;
+    match value {
+        serde_json::Value::String(s) if is_special_float_string(s) => None,
+        serde_json::Value::Number(n) => Decimal::from_str(&n.to_string()).ok(),
+        _ => None,
+    }
+}
+
+fn deserialize_optional_decimal_seq<'de, D>(deserializer: D) -> Result<Option<Vec<Option<Decimal>>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct OptionalDecimalSeqVisitor;
+
+    impl<'de> Visitor<'de> for OptionalDecimalSeqVisitor {
+        type Value = Option<Vec<Option<Decimal>>>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("an optional sequence of optional decimal numbers")
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut values = Vec::new();
+            while let Some(element) = seq.next_element::<Option<serde_json::Value>>()? {
+                values.push(element.as_ref().and_then(json_value_to_decimal));
+            }
+            Ok(Some(values))
+        }
+    }
+
+    deserializer.deserialize_any(OptionalDecimalSeqVisitor)
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -724,10 +792,13 @@ pub struct FinancialData {
     pub recommendation_mean: Option<f64>,
     pub recommendation_key: Option<String>,
     pub number_of_analyst_opinions: Option<u64>,
-    pub total_cash: Option<u64>,
+    /// Cash can be negative on the balance sheet, hence `i64` (Yahoo returns
+    /// negative integers for some tickers, e.g. GLABF: -613).
+    pub total_cash: Option<i64>,
     pub total_cash_per_share: Option<f64>,
     pub ebitda: Option<i64>,
-    pub total_debt: Option<u64>,
+    /// Debt can be negative on the balance sheet, hence `i64`.
+    pub total_debt: Option<i64>,
     pub quick_ratio: Option<f64>,
     pub current_ratio: Option<f64>,
     pub total_revenue: Option<i64>,
@@ -971,13 +1042,146 @@ mod tests {
             "yield": 0.42
         }"#;
         let summary: SummaryDetail = serde_json::from_str(summary_json).unwrap();
-        assert_eq!(summary._yield, Some(0.42));
+        assert_eq!(summary.yield_, Some(0.42));
 
         let stats_json = r#"{
             "yield": 1.23
         }"#;
         let stats: DefaultKeyStatistics = serde_json::from_str(stats_json).unwrap();
         assert_eq!(stats._yield, Some(1.23));
+    }
+
+    #[test]
+    fn test_deserialize_chart_with_infinity_bars() {
+        // Real-world case: PADEF returns "-Infinity" strings in adjclose,
+        // which previously failed the whole YResponse deserialization.
+        let json = r#"
+        {
+          "chart": {
+            "result": [
+              {
+                "meta": {
+                  "currency": "USD",
+                  "symbol": "PADEF",
+                  "instrumentType": "EQUITY",
+                  "exchangeName": "PNK",
+                  "fullExchangeName": "Other OTC",
+                  "gmtoffset": -14400,
+                  "timezone": "EDT",
+                  "exchangeTimezoneName": "America/New_York",
+                  "hasPrePostMarketData": false,
+                  "priceHint": 2,
+                  "currentTradingPeriod": {
+                    "pre":   { "timezone": "EDT", "start": 100, "end": 200, "gmtoffset": -14400 },
+                    "regular": { "timezone": "EDT", "start": 200, "end": 300, "gmtoffset": -14400 },
+                    "post":  { "timezone": "EDT", "start": 300, "end": 400, "gmtoffset": -14400 }
+                  },
+                  "dataGranularity": "1d",
+                  "range": "5d",
+                  "validRanges": ["1d", "5d", "1mo"]
+                },
+                "timestamp": [1000, 2000, 3000],
+                "events": null,
+                "indicators": {
+                  "quote": [
+                    {
+                      "open":   [10.0, 11.0, 12.0],
+                      "high":   ["Infinity", 12.0, 13.0],
+                      "low":    [9.0, 10.0, 11.0],
+                      "close":  [10.5, 11.5, 12.5],
+                      "volume": [100, 200, 300]
+                    }
+                  ],
+                  "adjclose": [
+                    { "adjclose": [10.5, "-Infinity", 12.5] }
+                  ]
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        "#;
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        let response = YResponse::from_json(value).unwrap();
+
+        let quotes = response.quotes().unwrap();
+        assert_eq!(quotes.len(), 3);
+        // "Infinity"/"-Infinity" elements become 0.0 (None), series stays aligned
+        assert_eq!(quotes[0].high, 0.0);
+        assert_eq!(quotes[0].adjclose, 10.5);
+        assert_eq!(quotes[1].adjclose, 0.0);
+        assert_eq!(quotes[2].adjclose, 12.5);
+        assert_eq!(quotes[2].high, 13.0);
+
+        // null elements inside adjclose are also tolerated
+        let json_null_element = r#"
+        {
+          "chart": {
+            "result": [
+              {
+                "meta": {
+                  "symbol": "T", "instrumentType": "EQUITY", "exchangeName": "NYSE",
+                  "fullExchangeName": "NYSE", "gmtoffset": -14400, "timezone": "EDT",
+                  "exchangeTimezoneName": "America/New_York", "hasPrePostMarketData": false,
+                  "priceHint": 2,
+                  "currentTradingPeriod": {
+                    "pre":   { "timezone": "EDT", "start": 100, "end": 200, "gmtoffset": -14400 },
+                    "regular": { "timezone": "EDT", "start": 200, "end": 300, "gmtoffset": -14400 },
+                    "post":  { "timezone": "EDT", "start": 300, "end": 400, "gmtoffset": -14400 }
+                  },
+                  "dataGranularity": "1d", "range": "1d", "validRanges": ["1d"]
+                },
+                "timestamp": [1000, 2000],
+                "indicators": {
+                  "quote": [
+                    { "open": [1.0, 2.0], "high": [2.0, 3.0], "low": [1.0, 2.0], "close": [1.5, 2.5], "volume": [10, 20] }
+                  ],
+                  "adjclose": [ { "adjclose": [1.5, null] } ]
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        "#;
+        let value: serde_json::Value = serde_json::from_str(json_null_element).unwrap();
+        let response = YResponse::from_json(value).unwrap();
+        let quotes = response.quotes().unwrap();
+        assert_eq!(quotes.len(), 2);
+        assert_eq!(quotes[1].adjclose, 0.0);
+    }
+
+    #[test]
+    fn test_deserialize_negative_total_cash_and_debt() {
+        // Real-world case: GLABF (totalCash = -613) and CCTL (totalCash = -45822)
+        let json = r#"
+        {
+          "quoteSummary": {
+            "result": [
+              {
+                "financialData": {
+                  "totalCash": -613,
+                  "totalDebt": -45822
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        "#;
+        let summary: YQuoteSummary = serde_json::from_str(json).unwrap();
+        let financial = summary
+            .quote_summary
+            .unwrap()
+            .result
+            .unwrap()
+            .pop()
+            .unwrap()
+            .financial_data
+            .unwrap();
+        assert_eq!(financial.total_cash, Some(-613));
+        assert_eq!(financial.total_debt, Some(-45822));
     }
 
     #[test]
