@@ -2,6 +2,23 @@ use super::*;
 use crate::quotes::{FinancialEvent, YEarningsResponse, YErrorMessage};
 
 impl YahooConnector {
+    #[cfg(feature = "governor")]
+    fn wait_for_rate_limit_blocking(&self) {
+        if let Some(limiter) = &self.rate_limiter {
+            use governor::clock::Clock;
+            let clock = governor::clock::DefaultClock::default();
+            loop {
+                match limiter.check() {
+                    Ok(_) => break,
+                    Err(not_until) => {
+                        let wait = not_until.wait_time_from(clock.now());
+                        std::thread::sleep(wait);
+                    }
+                }
+            }
+        }
+    }
+
     /// Retrieve the quotes of the last day for the given ticker
     pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         self.get_quote_range(ticker, interval, "1mo")
@@ -116,6 +133,9 @@ impl YahooConnector {
 
         let max_retries = 1;
         for i in 0..=max_retries {
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit_blocking();
+          
             // Build URL inside loop to use fresh crumb after refresh
             let url = reqwest::Url::parse(
                 &(format!(
@@ -215,6 +235,9 @@ impl YahooConnector {
         // Setup cookie for authenticated request
         let max_retries = 1;
         for attempt in 0..=max_retries {
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit_blocking();
+
             // Build URL inside loop to use fresh crumb after refresh
             let url = format!(
                 YEARNINGS_QUERY!(),
@@ -294,7 +317,7 @@ impl YahooConnector {
                         }));
                     }
 
-                    return Ok(self.parse_earnings_response(earnings_response)?);
+                    return self.parse_earnings_response(earnings_response);
                 }
                 Err(e) => {
                     // A parsing error is a critical failure unless we are retrying.
@@ -432,6 +455,12 @@ impl YahooConnector {
         let mut last_error = YahooError::NoResponse;
 
         for _attempt in 0..=MAX_RETRIES {
+            #[cfg(feature = "governor")]
+            self.wait_for_rate_limit_blocking();
+
+            let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
+            cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
+
             let response = self
                 .create_client()?
                 .get(crumb_url.clone())
@@ -471,6 +500,8 @@ impl YahooConnector {
     }
 
     fn get_cookie(&mut self) -> Result<String, YahooError> {
+        #[cfg(feature = "governor")]
+        self.wait_for_rate_limit_blocking();
         Ok(self
             .client
             .get(Y_GET_COOKIE_URL)
@@ -500,6 +531,8 @@ impl YahooConnector {
 
     /// Send request to yahoo! finance server and transform response to JSON value
     fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
+        #[cfg(feature = "governor")]
+        self.wait_for_rate_limit_blocking();
         let response = self.client.get(url).send()?.text()?;
 
         let json = serde_json::from_str::<serde_json::Value>(&response)
@@ -650,7 +683,7 @@ mod tests {
         let interval = "5m";
 
         let response = provider
-            .get_quote_period_interval("AAPL", &range, &interval, true)
+            .get_quote_period_interval("AAPL", range, interval, true)
             .unwrap();
 
         let metadata = response.metadata().unwrap();
@@ -664,7 +697,7 @@ mod tests {
         let provider = YahooConnector::new().unwrap();
         let response = provider.get_quote_range("BTC-USD", "1d", "5d").unwrap();
         let quotes = response.quotes().unwrap();
-        assert!(quotes.len() > 0usize);
+        assert!(!quotes.is_empty());
     }
 
     #[test]
@@ -691,8 +724,7 @@ mod tests {
         let end = datetime!(2020-01-31 23:59:59.99 UTC);
 
         let response = provider.get_quote_history("VTSAX", start, end);
-        if response.is_ok() {
-            let response = response.unwrap();
+        if let Ok(response) = response {
             let result = &response.chart.result.as_ref().unwrap();
 
             assert_eq!(result[0].timestamp.as_ref().unwrap().len(), 21);
@@ -747,7 +779,7 @@ mod tests {
         assert_eq!(&result[0].meta.range, "5y");
         assert_eq!(&result[0].meta.data_granularity, "1d");
         let capital_gains = response.capital_gains().unwrap();
-        assert!(capital_gains.len() > 0usize);
+        assert!(!capital_gains.is_empty());
     }
 
     #[test]
@@ -838,5 +870,81 @@ mod tests {
         }
 
         println!("Earnings-only events: {}", earnings.len());
+    }
+
+    #[cfg(feature = "governor")]
+    #[test]
+    fn test_governor_throttling_blocking() {
+        use std::num::NonZeroU32;
+        use std::time::Instant;
+
+        // 2 requests per second means ~500ms interval between tokens, burst of 2
+        let provider = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(2).unwrap()))
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        // First two requests consume the burst capacity of 2
+        provider.wait_for_rate_limit_blocking();
+        provider.wait_for_rate_limit_blocking();
+        let initial_elapsed = start.elapsed();
+
+        // Third request must wait for the next token (~500ms)
+        provider.wait_for_rate_limit_blocking();
+        let total_elapsed = start.elapsed();
+
+        assert!(initial_elapsed.as_millis() < 100);
+        assert!(total_elapsed.as_millis() >= 400);
+    }
+
+    #[cfg(feature = "governor")]
+    #[test]
+    fn test_governor_exact_rate_5_req_per_sec_blocking() {
+        use std::num::NonZeroU32;
+        use std::time::Instant;
+
+        // 5 req/sec -> 200ms per request after initial burst of 5
+        let provider = YahooConnector::builder()
+            .rate_limit(Some(NonZeroU32::new(5).unwrap()))
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        // Send 8 requests: 5 burst + 3 * 200ms = 600ms total expected delay
+        for _ in 0..8 {
+            provider.wait_for_rate_limit_blocking();
+        }
+        let elapsed = start.elapsed();
+
+        println!("5 req/sec blocking test for 8 requests took {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() >= 550 && elapsed.as_millis() <= 850,
+            "Expected 8 requests at 5 req/sec (blocking) to take ~600ms, but took {}ms",
+            elapsed.as_millis()
+        );
+    }
+
+    #[cfg(feature = "governor")]
+    #[test]
+    fn test_governor_disabled_no_delay_blocking() {
+        use std::time::Instant;
+
+        let provider = YahooConnector::builder()
+            .rate_limit(None)
+            .build()
+            .unwrap();
+
+        let start = Instant::now();
+        for _ in 0..20 {
+            provider.wait_for_rate_limit_blocking();
+        }
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 50,
+            "Disabled rate limit took {}ms for 20 requests in blocking mode, expected <50ms",
+            elapsed.as_millis()
+        );
     }
 }

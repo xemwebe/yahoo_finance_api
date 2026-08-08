@@ -1,3 +1,7 @@
+## Release 4.2.0
++ Added an optional rate-limiting `governor` feature to gracefully handle request throttling and prevent HTTP 429 rate limits.
++ Support for custom rate limits via `YahooConnectorBuilder::rate_limit()`.
+
 ## Release 4.1.1
 + security update for dependencies
 + update to reqwest 13.4 and thiserror 2.0

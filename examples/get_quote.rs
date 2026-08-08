@@ -28,6 +28,6 @@ fn main() {
     let mut quote_name = String::new();
     std::io::stdin().read_line(&mut quote_name).unwrap();
     let quote_name = quote_name.trim();
-    let quote = get_quote(&quote_name).unwrap();
+    let quote = get_quote(quote_name).unwrap();
     println!("Most recent price of {quote_name} is {quote}");
 }
