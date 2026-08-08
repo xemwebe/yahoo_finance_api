@@ -450,7 +450,9 @@ fn json_value_to_decimal(value: &serde_json::Value) -> Option<Decimal> {
     }
 }
 
-fn deserialize_optional_decimal_seq<'de, D>(deserializer: D) -> Result<Option<Vec<Option<Decimal>>>, D::Error>
+fn deserialize_optional_decimal_seq<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<Option<Decimal>>>, D::Error>
 where
     D: Deserializer<'de>,
 {

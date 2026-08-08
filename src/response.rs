@@ -57,7 +57,10 @@ pub(crate) fn decode_body(
         return Err(YahooError::Unauthorized);
     }
     if status == StatusCode::NOT_FOUND {
-        return Err(YahooError::FetchFailed(format!("404, request url: {}", url)));
+        return Err(YahooError::FetchFailed(format!(
+            "404, request url: {}",
+            url
+        )));
     }
     if !status.is_success() {
         let body = text.trim();
@@ -234,7 +237,11 @@ mod tests {
         match result {
             #[cfg(feature = "debug")]
             Err(YahooError::DeserializeFailedDebug(text)) => {
-                assert!(text.contains("EOF") || text.contains("expected value"), "{}", text);
+                assert!(
+                    text.contains("EOF") || text.contains("expected value"),
+                    "{}",
+                    text
+                );
                 assert!(text.contains("body:"));
             }
             #[cfg(not(feature = "debug"))]

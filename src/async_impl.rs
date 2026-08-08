@@ -151,7 +151,9 @@ impl YahooConnector {
             let status = response.status();
             let text = response.text().await?;
 
-            let result: YQuoteSummary = crate::response::decode_body(text, status, &format!("get_ticker_info: {}", symbol)).and_then(YQuoteSummary::from_json)?;
+            let result: YQuoteSummary =
+                crate::response::decode_body(text, status, &format!("get_ticker_info: {}", symbol))
+                    .and_then(YQuoteSummary::from_json)?;
 
             if let Some(finance) = &result.finance {
                 if let Some(error) = &finance.error {
