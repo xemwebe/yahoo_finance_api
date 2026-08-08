@@ -1,6 +1,13 @@
 ## Release 4.2.0
 + Added an optional rate-limiting `governor` feature to gracefully handle request throttling and prevent HTTP 429 rate limits.
 + Support for custom rate limits via `YahooConnectorBuilder::rate_limit()`.
++ extend quotes by field `yield_` (representing Yahoo's yield field)
++ devcontainer added
++ Route all Yahoo API requests through proxy pool
++ Fix: get_crumb, get_ticker_info, get_financial_events now use proxy
++ Fix: cookie header sends only name=value, not raw Set-Cookie attributeg
++ Fix: stale crumb in URL after Invalid Crumb refresh
++ Add https_only(true) for security
 
 ## Release 4.1.1
 + security update for dependencies

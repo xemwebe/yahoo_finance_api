@@ -611,7 +611,7 @@ pub struct SummaryDetail {
     pub ask_size: Option<i64>,
     pub market_cap: Option<u64>,
     #[serde(rename = "yield")]
-    pub _yield: Option<f64>,
+    pub yield_: Option<f64>,
     pub fifty_two_week_low: Option<f64>,
     pub fifty_two_week_high: Option<f64>,
     #[serde(
