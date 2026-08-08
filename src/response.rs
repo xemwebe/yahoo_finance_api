@@ -1,6 +1,46 @@
 use reqwest::StatusCode;
 
+use crate::quotes::YErrorMessage;
 use crate::YahooError;
+
+/// Extract `(code, description)` from an `"error"` field, whether it sits at
+/// the top level (`{"error": {"code": ...}}`) or inside the chart payload
+/// (`{"chart": {"error": {"code": ...}}}`), or is a plain error string.
+fn top_error_code(json: &serde_json::Value) -> Option<(String, Option<String>)> {
+    let candidates = [
+        json.get("error"),
+        json.get("chart").and_then(|c| c.get("error")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if let Some(code) = candidate.get("code").and_then(|c| c.as_str()) {
+            return Some((
+                code.to_string(),
+                candidate
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(str::to_string),
+            ));
+        }
+        if let Some(msg) = candidate.as_str() {
+            return Some((msg.to_string(), None));
+        }
+    }
+    None
+}
+
+/// Classify a known error code into the specific `YahooError` variant so
+/// callers can react (retry on rate limit, refresh crumb on unauthorized).
+fn error_from_code(code: &str, description: Option<&str>, url: &str) -> YahooError {
+    match code {
+        "Too Many Requests" => YahooError::TooManyRequests(url.to_string()),
+        "Unauthorized" => YahooError::Unauthorized,
+        "Invalid Crumb" => YahooError::InvalidCrumb,
+        _ => YahooError::ApiError(YErrorMessage {
+            code: Some(code.to_string()),
+            description: description.map(str::to_string),
+        }),
+    }
+}
 
 /// Decode a raw HTTP response body into a JSON value with proper error
 /// classification so callers can distinguish retriable (empty body, HTML
@@ -20,6 +60,14 @@ pub(crate) fn decode_body(
         return Err(YahooError::FetchFailed(format!("404, request url: {}", url)));
     }
     if !status.is_success() {
+        let body = text.trim();
+        if !body.is_empty() && body.starts_with('{') {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+                if let Some((code, description)) = top_error_code(&json) {
+                    return Err(error_from_code(&code, description.as_deref(), url));
+                }
+            }
+        }
         return Err(YahooError::FetchFailed(format!(
             "{} status, request url: {}",
             status.as_u16(),
@@ -39,7 +87,12 @@ pub(crate) fn decode_body(
     }
 
     match serde_json::from_str::<serde_json::Value>(body) {
-        Ok(json) => Ok(json),
+        Ok(json) => {
+            if let Some((code, description)) = top_error_code(&json) {
+                return Err(error_from_code(&code, description.as_deref(), url));
+            }
+            Ok(json)
+        }
         Err(e) => {
             #[cfg(feature = "debug")]
             {
@@ -134,6 +187,44 @@ mod tests {
         let json = r#"{"chart": {"result": [1, 2, 3], "error": null}}"#;
         let parsed = parse(json, StatusCode::OK).unwrap();
         assert_eq!(parsed["chart"]["result"][0], 1);
+    }
+
+    #[test]
+    fn test_decode_top_level_error() {
+        match parse(
+            r#"{"error":{"code":"Too Many Requests","description":"limit reached"}}"#,
+            StatusCode::OK,
+        ) {
+            Err(YahooError::TooManyRequests(_)) => {}
+            other => panic!("expected TooManyRequests, got {:?}", other),
+        }
+        match parse(r#"{"error":{"code":"Unauthorized"}}"#, StatusCode::OK) {
+            Err(YahooError::Unauthorized) => {}
+            other => panic!("expected Unauthorized, got {:?}", other),
+        }
+        match parse(r#"{"error":{"code":"Invalid Crumb"}}"#, StatusCode::OK) {
+            Err(YahooError::InvalidCrumb) => {}
+            other => panic!("expected InvalidCrumb, got {:?}", other),
+        }
+        match parse(
+            r#"{"error":{"code":"Other","description":"boom"}}"#,
+            StatusCode::OK,
+        ) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("Other"));
+                assert_eq!(err.description.as_deref(), Some("boom"));
+            }
+            other => panic!("expected ApiError, got {:?}", other),
+        }
+        match parse(
+            r#"{"error":{"code":"InvalidPeriod","description":"period1 > period2"}}"#,
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("InvalidPeriod"));
+            }
+            other => panic!("expected ApiError for 422, got {:?}", other),
+        }
     }
 
     #[test]

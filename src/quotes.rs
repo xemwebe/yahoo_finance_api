@@ -215,18 +215,27 @@ pub struct YMetaData {
     pub gmtoffset: i32,
     pub timezone: String,
     pub exchange_timezone_name: String,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub regular_market_price: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub chart_previous_close: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub previous_close: Option<Decimal>,
     pub has_pre_post_market_data: bool,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub fifty_two_week_high: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub fifty_two_week_low: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub regular_market_day_high: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub regular_market_day_low: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub regular_market_volume: Option<Decimal>,
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
+    #[serde(default)]
     pub current_trading_period: CurrentTradingPeriod,
     #[serde(default)]
     pub trading_periods: TradingPeriods,
@@ -474,6 +483,18 @@ where
     }
 
     deserializer.deserialize_any(OptionalDecimalSeqVisitor)
+}
+
+/// Tolerant deserializer for a single optional decimal (meta fields such as
+/// `regularMarketPrice`). Yahoo sometimes returns `"Infinity"`/`"-Infinity"`/
+/// `"NaN"` as strings there too; such values become `None` instead of failing
+/// the whole response.
+fn deserialize_optional_decimal<'de, D>(deserializer: D) -> Result<Option<Decimal>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.as_ref().and_then(json_value_to_decimal))
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -865,6 +886,17 @@ pub struct FinancialEvent {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "decimal")]
+    fn dec(v: f64) -> Decimal {
+        use std::str::FromStr;
+        Decimal::from_str(&format!("{}", v)).unwrap()
+    }
+
+    #[cfg(not(feature = "decimal"))]
+    fn dec(v: f64) -> Decimal {
+        v
+    }
+
     #[test]
     fn test_deserialize_period_info() {
         let period_info_json = r#"
@@ -1108,11 +1140,11 @@ mod tests {
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 3);
         // "Infinity"/"-Infinity" elements become 0.0 (None), series stays aligned
-        assert_eq!(quotes[0].high, 0.0);
-        assert_eq!(quotes[0].adjclose, 10.5);
-        assert_eq!(quotes[1].adjclose, 0.0);
-        assert_eq!(quotes[2].adjclose, 12.5);
-        assert_eq!(quotes[2].high, 13.0);
+        assert_eq!(quotes[0].high, dec(0.0));
+        assert_eq!(quotes[0].adjclose, dec(10.5));
+        assert_eq!(quotes[1].adjclose, dec(0.0));
+        assert_eq!(quotes[2].adjclose, dec(12.5));
+        assert_eq!(quotes[2].high, dec(13.0));
 
         // null elements inside adjclose are also tolerated
         let json_null_element = r#"
@@ -1149,7 +1181,7 @@ mod tests {
         let response = YResponse::from_json(value).unwrap();
         let quotes = response.quotes().unwrap();
         assert_eq!(quotes.len(), 2);
-        assert_eq!(quotes[1].adjclose, 0.0);
+        assert_eq!(quotes[1].adjclose, dec(0.0));
     }
 
     #[test]
@@ -1182,6 +1214,45 @@ mod tests {
             .unwrap();
         assert_eq!(financial.total_cash, Some(-613));
         assert_eq!(financial.total_debt, Some(-45822));
+    }
+
+    #[test]
+    fn test_deserialize_meta_infinity_and_missing_trading_period() {
+        let json = r#"
+        {
+          "currency": "USD",
+          "symbol": "PADEF",
+          "instrumentType": "EQUITY",
+          "exchangeName": "OTC",
+          "fullExchangeName": "Other OTC",
+          "regularMarketTime": 1784620800,
+          "gmtoffset": -14400,
+          "timezone": "EDT",
+          "exchangeTimezoneName": "America/New_York",
+          "regularMarketPrice": "Infinity",
+          "chartPreviousClose": "-Infinity",
+          "previousClose": 13.0,
+          "hasPrePostMarketData": false,
+          "fiftyTwoWeekHigh": "NaN",
+          "fiftyTwoWeekLow": null,
+          "regularMarketDayHigh": 13.5,
+          "regularMarketDayLow": 12.9,
+          "regularMarketVolume": 1000000,
+          "priceHint": 2,
+          "dataGranularity": "1d",
+          "range": "1d",
+          "validRanges": ["1d"]
+        }
+        "#;
+        let meta: YMetaData = serde_json::from_str(json).unwrap();
+        assert!(meta.regular_market_price.is_none());
+        assert!(meta.chart_previous_close.is_none());
+        assert!(meta.fifty_two_week_high.is_none());
+        assert!(meta.fifty_two_week_low.is_none());
+        assert!(meta.previous_close.is_some());
+        assert!(meta.regular_market_day_high.is_some());
+        assert!(meta.regular_market_volume.is_some());
+        assert_eq!(meta.current_trading_period.regular.end, 0);
     }
 
     #[test]
