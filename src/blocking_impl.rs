@@ -135,7 +135,7 @@ impl YahooConnector {
         for i in 0..=max_retries {
             #[cfg(feature = "governor")]
             self.wait_for_rate_limit_blocking();
-          
+
             // Build URL inside loop to use fresh crumb after refresh
             let url = reqwest::Url::parse(
                 &(format!(
@@ -203,14 +203,6 @@ impl YahooConnector {
         if self.cookie.is_none() {
             self.cookie = Some(self.get_cookie()?);
         }
-
-        let url = format!(
-            YEARNINGS_QUERY!(),
-            url = Y_EARNINGS_URL,
-            lang = "en-US",
-            region = "US",
-            crumb = self.crumb.as_ref().unwrap()
-        );
 
         // Create request body
         let query_body = serde_json::json!({
@@ -457,9 +449,6 @@ impl YahooConnector {
         for _attempt in 0..=MAX_RETRIES {
             #[cfg(feature = "governor")]
             self.wait_for_rate_limit_blocking();
-
-            let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-            cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
 
             let response = self
                 .create_client()?
@@ -930,10 +919,7 @@ mod tests {
     fn test_governor_disabled_no_delay_blocking() {
         use std::time::Instant;
 
-        let provider = YahooConnector::builder()
-            .rate_limit(None)
-            .build()
-            .unwrap();
+        let provider = YahooConnector::builder().rate_limit(None).build().unwrap();
 
         let start = Instant::now();
         for _ in 0..20 {

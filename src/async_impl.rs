@@ -203,14 +203,6 @@ impl YahooConnector {
             self.cookie = Some(self.get_cookie().await?);
         }
 
-        let url = format!(
-            YEARNINGS_QUERY!(),
-            url = Y_EARNINGS_URL,
-            lang = "en-US",
-            region = "US",
-            crumb = self.crumb.as_ref().unwrap()
-        );
-
         // Create request body
         let query_body = serde_json::json!({
             "size": limit,
@@ -247,7 +239,7 @@ impl YahooConnector {
             );
 
             let client = self.create_client().await?;
-            
+
             let response = client
                 .post(&url)
                 .header("Cookie", self.cookie_header_value())
@@ -317,7 +309,7 @@ impl YahooConnector {
                         }));
                     }
 
-                    return Ok(self.parse_earnings_response(earnings_response)?);
+                    return self.parse_earnings_response(earnings_response);
                 }
                 Err(e) => {
                     // A parsing error is a critical failure unless we are retrying.
@@ -456,9 +448,6 @@ impl YahooConnector {
         let mut last_error = YahooError::NoResponse;
 
         for _attempt in 0..=MAX_RETRIES {
-            let cookie_provider = Arc::new(reqwest::cookie::Jar::default());
-            cookie_provider.add_cookie_str(&self.cookie.clone().unwrap(), &crumb_url);
-
             #[cfg(feature = "governor")]
             self.wait_for_rate_limit().await;
 
@@ -466,7 +455,7 @@ impl YahooConnector {
                 .create_client()
                 .await?
                 .get(crumb_url.clone())
-                .header("Cookie", self.cookie_header_value())
+                .header("Cookie", self.cookie.clone().unwrap_or_default())
                 .send()
                 .await?;
 
@@ -909,10 +898,7 @@ mod tests {
             .unwrap();
         assert!(provider_custom.rate_limiter.is_some());
 
-        let provider_disabled = YahooConnector::builder()
-            .rate_limit(None)
-            .build()
-            .unwrap();
+        let provider_disabled = YahooConnector::builder().rate_limit(None).build().unwrap();
         assert!(provider_disabled.rate_limiter.is_none());
 
         let client = reqwest::Client::new();
@@ -1006,10 +992,7 @@ mod tests {
         use std::time::Instant;
 
         // Rate limit explicitly set to None (disabled)
-        let provider = YahooConnector::builder()
-            .rate_limit(None)
-            .build()
-            .unwrap();
+        let provider = YahooConnector::builder().rate_limit(None).build().unwrap();
 
         let start = Instant::now();
         for _ in 0..20 {

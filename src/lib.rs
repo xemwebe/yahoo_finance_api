@@ -161,7 +161,7 @@ use std::time::Duration;
 use time::OffsetDateTime;
 
 #[cfg(feature = "governor")]
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, sync::Arc};
 
 #[cfg(feature = "blocking")]
 use reqwest::blocking::{Client, ClientBuilder};
@@ -171,7 +171,10 @@ use reqwest::{Client, ClientBuilder};
 
 #[cfg(feature = "governor")]
 use governor::{
-    clock::DefaultClock, middleware::NoOpMiddleware, state::{InMemoryState, NotKeyed}, Quota, RateLimiter,
+    clock::DefaultClock,
+    middleware::NoOpMiddleware,
+    state::{InMemoryState, NotKeyed},
+    Quota, RateLimiter,
 };
 
 #[cfg(feature = "governor")]
@@ -254,6 +257,7 @@ pub struct YahooConnector {
     rate_limiter: Option<Arc<YRateLimiter>>,
 }
 
+#[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,
     timeout: Option<Duration>,
@@ -261,19 +265,6 @@ pub struct YahooConnectorBuilder {
     proxy: Option<Proxy>,
     #[cfg(feature = "governor")]
     rate_limit_per_second: Option<Option<NonZeroU32>>,
-}
-
-impl Default for YahooConnectorBuilder {
-    fn default() -> Self {
-        Self {
-            inner: ClientBuilder::default(),
-            timeout: None,
-            user_agent: None,
-            proxy: None,
-            #[cfg(feature = "governor")]
-            rate_limit_per_second: None,
-        }
-    }
 }
 
 impl YahooConnector {
@@ -350,7 +341,9 @@ impl YahooConnectorBuilder {
         let rate_limiter = {
             // `rate_limit_per_second` is Option<Option<NonZeroU32>>:
             // None = unconfigured (defaults to 10 rps), Some(None) = explicitly disabled, Some(Some(n)) = n rps.
-            let rps_option = self.rate_limit_per_second.unwrap_or_else(|| NonZeroU32::new(10));
+            let rps_option = self
+                .rate_limit_per_second
+                .unwrap_or_else(|| NonZeroU32::new(10));
             rps_option.map(|rps| Arc::new(RateLimiter::direct(Quota::per_second(rps))))
         };
 
@@ -367,7 +360,7 @@ impl YahooConnectorBuilder {
     /// When the `governor` feature is enabled, a default rate limit of 10 requests/second
     /// is applied. To customize or disable the rate limit with a custom client, use
     /// `YahooConnector::builder().rate_limit(...).build()` instead.
-    pub fn build_with_client(self, client: Client) -> Result<YahooConnector, YahooError> {
+    pub fn build_with_client(client: Client) -> Result<YahooConnector, YahooError> {
         #[cfg(feature = "governor")]
         let rate_limiter = Some(Arc::new(RateLimiter::direct(Quota::per_second(
             NonZeroU32::new(10).unwrap(),
