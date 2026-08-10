@@ -1666,10 +1666,22 @@ mod tests {
         assert_eq!(ee.avg.as_ref().unwrap().raw, Some(1.97549));
         assert_eq!(ee.number_of_analysts.as_ref().unwrap().raw, Some(28.0));
         let eps_trend = item.eps_trend.as_ref().unwrap();
-        assert_eq!(eps_trend.seven_days_ago.as_ref().unwrap().raw, Some(2.01204));
-        assert_eq!(eps_trend.thirty_days_ago.as_ref().unwrap().raw, Some(2.00836));
-        assert_eq!(eps_trend.sixty_days_ago.as_ref().unwrap().raw, Some(2.00767));
-        assert_eq!(eps_trend.ninety_days_ago.as_ref().unwrap().raw, Some(2.00379));
+        assert_eq!(
+            eps_trend.seven_days_ago.as_ref().unwrap().raw,
+            Some(2.01204)
+        );
+        assert_eq!(
+            eps_trend.thirty_days_ago.as_ref().unwrap().raw,
+            Some(2.00836)
+        );
+        assert_eq!(
+            eps_trend.sixty_days_ago.as_ref().unwrap().raw,
+            Some(2.00767)
+        );
+        assert_eq!(
+            eps_trend.ninety_days_ago.as_ref().unwrap().raw,
+            Some(2.00379)
+        );
         let eps_rev = item.eps_revisions.as_ref().unwrap();
         assert_eq!(eps_rev.up_last_7days.as_ref().unwrap().raw, Some(1.0));
         assert_eq!(eps_rev.down_last7_days.as_ref().unwrap().raw, Some(1.0));
@@ -1876,8 +1888,14 @@ mod tests {
         }
         "#;
         let it: InsiderTransactions = serde_json::from_str(json).unwrap();
-        assert_eq!(it.transactions[0].filer_name.as_deref(), Some("BORDERS BEN"));
-        assert_eq!(it.transactions[0].value.as_ref().unwrap().raw, Some(34236.0));
+        assert_eq!(
+            it.transactions[0].filer_name.as_deref(),
+            Some("BORDERS BEN")
+        );
+        assert_eq!(
+            it.transactions[0].value.as_ref().unwrap().raw,
+            Some(34236.0)
+        );
         assert_eq!(it.transactions[0].ownership.as_deref(), Some("D"));
         assert!(it.transactions[1].value.is_none());
         assert_eq!(
@@ -1929,7 +1947,10 @@ mod tests {
             inst.ownership_list[0].position.as_ref().unwrap().raw,
             Some(1162996939.0)
         );
-        assert_eq!(inst.ownership_list[0].pct_change.as_ref().unwrap().raw, Some(0.016));
+        assert_eq!(
+            inst.ownership_list[0].pct_change.as_ref().unwrap().raw,
+            Some(0.016)
+        );
 
         let fund: FundOwnership = serde_json::from_str(json).unwrap();
         assert_eq!(
@@ -2059,7 +2080,12 @@ mod tests {
             th.equity_holdings.as_ref().unwrap().price_to_earnings,
             Some(29.6)
         );
-        assert!(th.bond_holdings.as_ref().unwrap().price_to_earnings.is_none());
+        assert!(th
+            .bond_holdings
+            .as_ref()
+            .unwrap()
+            .price_to_earnings
+            .is_none());
         assert_eq!(th.sector_weightings[1].get("technology"), Some(&0.334));
         assert_eq!(th.bond_ratings[0].get("us_government"), Some(&0.0));
     }
@@ -2119,7 +2145,10 @@ mod tests {
         assert_eq!(ee.high.as_ref().unwrap().raw, Some(2.04));
         assert_eq!(ee.year_ago_eps.as_ref().unwrap().raw, Some(1.85));
         assert_eq!(ee.number_of_analysts.as_ref().unwrap().raw, Some(28.0));
-        assert_eq!(ee.number_of_analysts.as_ref().unwrap().long_fmt.as_deref(), Some("28"));
+        assert_eq!(
+            ee.number_of_analysts.as_ref().unwrap().long_fmt.as_deref(),
+            Some("28")
+        );
         assert_eq!(ee.growth.as_ref().unwrap().raw, Some(0.0678));
         assert_eq!(ee.earnings_currency.as_deref(), Some("USD"));
 
@@ -2132,16 +2161,31 @@ mod tests {
         assert_eq!(re.low.as_ref().unwrap().raw, Some(112137000000.0));
         assert_eq!(re.high.as_ref().unwrap().raw, Some(115068279000.0));
         assert_eq!(re.number_of_analysts.as_ref().unwrap().raw, Some(26.0));
-        assert_eq!(re.year_ago_revenue.as_ref().unwrap().raw, Some(102466000000.0));
+        assert_eq!(
+            re.year_ago_revenue.as_ref().unwrap().raw,
+            Some(102466000000.0)
+        );
         assert_eq!(re.growth.as_ref().unwrap().raw, Some(0.105299994));
         assert_eq!(re.revenue_currency.as_deref(), Some("USD"));
 
         let eps_trend = item.eps_trend.as_ref().unwrap();
         assert_eq!(eps_trend.current.as_ref().unwrap().raw, Some(1.97549));
-        assert_eq!(eps_trend.seven_days_ago.as_ref().unwrap().raw, Some(2.01204));
-        assert_eq!(eps_trend.thirty_days_ago.as_ref().unwrap().raw, Some(2.00836));
-        assert_eq!(eps_trend.sixty_days_ago.as_ref().unwrap().raw, Some(2.00767));
-        assert_eq!(eps_trend.ninety_days_ago.as_ref().unwrap().raw, Some(2.00379));
+        assert_eq!(
+            eps_trend.seven_days_ago.as_ref().unwrap().raw,
+            Some(2.01204)
+        );
+        assert_eq!(
+            eps_trend.thirty_days_ago.as_ref().unwrap().raw,
+            Some(2.00836)
+        );
+        assert_eq!(
+            eps_trend.sixty_days_ago.as_ref().unwrap().raw,
+            Some(2.00767)
+        );
+        assert_eq!(
+            eps_trend.ninety_days_ago.as_ref().unwrap().raw,
+            Some(2.00379)
+        );
         assert_eq!(eps_trend.eps_trend_currency.as_deref(), Some("USD"));
 
         let eps_rev = item.eps_revisions.as_ref().unwrap();
@@ -2166,9 +2210,15 @@ mod tests {
         assert_eq!(item.eps_estimate.as_ref().unwrap().raw, Some(1.76993));
         assert_eq!(item.eps_difference.as_ref().unwrap().raw, Some(0.08));
         assert_eq!(item.surprise_percent.as_ref().unwrap().raw, Some(0.0452));
-        assert_eq!(item.surprise_percent.as_ref().unwrap().fmt.as_deref(), Some("4.52%"));
+        assert_eq!(
+            item.surprise_percent.as_ref().unwrap().fmt.as_deref(),
+            Some("4.52%")
+        );
         assert_eq!(item.quarter.as_ref().unwrap().raw, Some(1759190400.0));
-        assert_eq!(item.quarter.as_ref().unwrap().fmt.as_deref(), Some("2025-09-30"));
+        assert_eq!(
+            item.quarter.as_ref().unwrap().fmt.as_deref(),
+            Some("2025-09-30")
+        );
         assert_eq!(item.currency.as_deref(), Some("USD"));
         assert_eq!(item.period.as_deref(), Some("-4q"));
     }
@@ -2265,7 +2315,10 @@ mod tests {
         assert_eq!(h.relation.as_deref(), Some("General Counsel"));
         assert_eq!(h.url.as_deref(), Some(""));
         assert_eq!(h.transaction_description.as_deref(), Some("Stock Gift"));
-        assert_eq!(h.latest_trans_date.as_ref().unwrap().raw, Some(1762905600.0));
+        assert_eq!(
+            h.latest_trans_date.as_ref().unwrap().raw,
+            Some(1762905600.0)
+        );
         assert_eq!(
             h.latest_trans_date.as_ref().unwrap().fmt.as_deref(),
             Some("2025-11-12")
@@ -2279,7 +2332,10 @@ mod tests {
             h.position_direct.as_ref().unwrap().long_fmt.as_deref(),
             Some("175,408")
         );
-        assert_eq!(h.position_direct_date.as_ref().unwrap().raw, Some(1762905600.0));
+        assert_eq!(
+            h.position_direct_date.as_ref().unwrap().raw,
+            Some(1762905600.0)
+        );
         assert!(h.position_indirect.is_none());
         assert!(h.position_indirect_date.is_none());
         assert!(h.shares.is_none());
@@ -2342,16 +2398,28 @@ mod tests {
         let item = &io.ownership_list[0];
         assert_eq!(item.max_age, Some(1));
         assert_eq!(item.report_date.as_ref().unwrap().raw, Some(1782777600.0));
-        assert_eq!(item.report_date.as_ref().unwrap().fmt.as_deref(), Some("2026-06-30"));
+        assert_eq!(
+            item.report_date.as_ref().unwrap().fmt.as_deref(),
+            Some("2026-06-30")
+        );
         assert_eq!(item.organization.as_deref(), Some("Blackrock Inc."));
         assert_eq!(item.pct_held.as_ref().unwrap().raw, Some(0.0797));
-        assert_eq!(item.pct_held.as_ref().unwrap().fmt.as_deref(), Some("7.97%"));
+        assert_eq!(
+            item.pct_held.as_ref().unwrap().fmt.as_deref(),
+            Some("7.97%")
+        );
         assert_eq!(item.position.as_ref().unwrap().raw, Some(1162996939.0));
-        assert_eq!(item.position.as_ref().unwrap().long_fmt.as_deref(), Some("1,162,996,939"));
+        assert_eq!(
+            item.position.as_ref().unwrap().long_fmt.as_deref(),
+            Some("1,162,996,939")
+        );
         assert_eq!(item.value.as_ref().unwrap().raw, Some(356653944437.0));
         assert_eq!(item.value.as_ref().unwrap().fmt.as_deref(), Some("356.65B"));
         assert_eq!(item.pct_change.as_ref().unwrap().raw, Some(0.016));
-        assert_eq!(item.pct_change.as_ref().unwrap().fmt.as_deref(), Some("1.60%"));
+        assert_eq!(
+            item.pct_change.as_ref().unwrap().fmt.as_deref(),
+            Some("1.60%")
+        );
     }
 
     #[test]
@@ -2369,11 +2437,17 @@ mod tests {
         );
         assert_eq!(item.pct_held.as_ref().unwrap().raw, Some(0.0319));
         assert_eq!(item.position.as_ref().unwrap().raw, Some(466211410.0));
-        assert_eq!(item.position.as_ref().unwrap().fmt.as_deref(), Some("466.21M"));
+        assert_eq!(
+            item.position.as_ref().unwrap().fmt.as_deref(),
+            Some("466.21M")
+        );
         assert_eq!(item.value.as_ref().unwrap().raw, Some(142972120340.0));
         assert_eq!(item.value.as_ref().unwrap().fmt.as_deref(), Some("142.97B"));
         assert_eq!(item.pct_change.as_ref().unwrap().raw, Some(0.004));
-        assert_eq!(item.pct_change.as_ref().unwrap().fmt.as_deref(), Some("0.40%"));
+        assert_eq!(
+            item.pct_change.as_ref().unwrap().fmt.as_deref(),
+            Some("0.40%")
+        );
     }
 
     #[test]

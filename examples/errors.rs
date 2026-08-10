@@ -71,7 +71,10 @@ async fn main() {
     }
 
     // 2. Unknown ticker: Yahoo usually replies with an error payload
-    match provider.get_quote_range("NOT_A_REAL_TICKER", "1d", "5d").await {
+    match provider
+        .get_quote_range("NOT_A_REAL_TICKER", "1d", "5d")
+        .await
+    {
         Ok(_) => println!("unexpected success"),
         Err(err) => report(&err),
     }

@@ -7,10 +7,7 @@ async fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    let quote_history = provider
-        .get_quote_history("VTI", start, end)
-        .await
-        .unwrap();
+    let quote_history = provider.get_quote_history("VTI", start, end).await.unwrap();
     println!("Quote history of VTI:\n{:#?}", quote_history);
 }
 

@@ -139,11 +139,13 @@ impl YahooConnector {
             self.wait_for_rate_limit_blocking();
 
             // Build URL inside loop to use fresh crumb after refresh
-            let url = reqwest::Url::parse(&(format!(
-                YQUOTE_SUMMARY_QUERY!(),
-                symbol = symbol,
-                crumb = self.crumb.as_ref().unwrap()
-            )))
+            let url = reqwest::Url::parse(
+                &(format!(
+                    YQUOTE_SUMMARY_QUERY!(),
+                    symbol = symbol,
+                    crumb = self.crumb.as_ref().unwrap()
+                )),
+            )
             .map_err(|_| YahooError::InvalidUrl)?;
 
             let text = self
@@ -873,9 +875,7 @@ mod tests {
     fn test_module_insider_transactions() {
         let mut provider = YahooConnector::new().unwrap();
         let s = fetch_summary(&mut provider, "AAPL");
-        let transactions = s
-            .insider_transactions
-            .expect("insiderTransactions module");
+        let transactions = s.insider_transactions.expect("insiderTransactions module");
         assert!(!transactions.transactions.is_empty());
         assert!(transactions.transactions[0].filer_name.is_some());
     }
@@ -894,7 +894,9 @@ mod tests {
     fn test_module_institution_ownership() {
         let mut provider = YahooConnector::new().unwrap();
         let s = fetch_summary(&mut provider, "AAPL");
-        let ownership = s.institution_ownership.expect("institutionOwnership module");
+        let ownership = s
+            .institution_ownership
+            .expect("institutionOwnership module");
         assert!(!ownership.ownership_list.is_empty());
         assert!(ownership.ownership_list[0].organization.is_some());
     }

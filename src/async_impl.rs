@@ -135,11 +135,13 @@ impl YahooConnector {
             self.wait_for_rate_limit().await;
 
             // Build URL inside loop to use fresh crumb after refresh
-            let url = reqwest::Url::parse(&(format!(
-                YQUOTE_SUMMARY_QUERY!(),
-                symbol = symbol,
-                crumb = self.crumb.as_ref().unwrap()
-            )))
+            let url = reqwest::Url::parse(
+                &(format!(
+                    YQUOTE_SUMMARY_QUERY!(),
+                    symbol = symbol,
+                    crumb = self.crumb.as_ref().unwrap()
+                )),
+            )
             .map_err(|_| YahooError::InvalidUrl)?;
 
             let text = self
@@ -894,9 +896,7 @@ mod tests {
     fn test_module_insider_transactions() {
         let mut provider = YahooConnector::new().unwrap();
         let s = fetch_summary(&mut provider, "AAPL");
-        let transactions = s
-            .insider_transactions
-            .expect("insiderTransactions module");
+        let transactions = s.insider_transactions.expect("insiderTransactions module");
         assert!(!transactions.transactions.is_empty());
         assert!(transactions.transactions[0].filer_name.is_some());
     }
@@ -915,7 +915,9 @@ mod tests {
     fn test_module_institution_ownership() {
         let mut provider = YahooConnector::new().unwrap();
         let s = fetch_summary(&mut provider, "AAPL");
-        let ownership = s.institution_ownership.expect("institutionOwnership module");
+        let ownership = s
+            .institution_ownership
+            .expect("institutionOwnership module");
         assert!(!ownership.ownership_list.is_empty());
         assert!(ownership.ownership_list[0].organization.is_some());
     }
@@ -989,10 +991,10 @@ mod tests {
         // Foreign listings: HNL.DE (Germany), 7203.T (Tokyo)
         // IPO/small cap: RDDT (Reddit), ARM
         let symbols = [
-            "AAPL", "MSFT", "BABA", "TSM", "VOO", "SPY", "QQQ", "TQQQ", "VTSAX", "VFIAX",
-            "FSKAX", "AMAGX", "CL=F", "GC=F", "ES=F", "NQ=F", "EURUSD=X", "GBPUSD=X",
-            "USDJPY=X", "USDCAD=X", "BTC-USD", "ETH-USD", "^GSPC", "^VIX", "^IXIC", "^TNX",
-            "BND", "VNQ", "O", "HNL.DE", "7203.T", "RDDT", "ARM",
+            "AAPL", "MSFT", "BABA", "TSM", "VOO", "SPY", "QQQ", "TQQQ", "VTSAX", "VFIAX", "FSKAX",
+            "AMAGX", "CL=F", "GC=F", "ES=F", "NQ=F", "EURUSD=X", "GBPUSD=X", "USDJPY=X",
+            "USDCAD=X", "BTC-USD", "ETH-USD", "^GSPC", "^VIX", "^IXIC", "^TNX", "BND", "VNQ", "O",
+            "HNL.DE", "7203.T", "RDDT", "ARM",
         ];
         let mut report = String::new();
         let mut failed: Vec<(String, String)> = Vec::new();
@@ -1014,14 +1016,20 @@ mod tests {
                                 ("earningsTrend", s.earnings_trend.is_some()),
                                 ("earningsHistory", s.earnings_history.is_some()),
                                 ("earnings", s.earnings.is_some()),
-                                ("upgradeDowngradeHistory", s.upgrade_downgrade_history.is_some()),
+                                (
+                                    "upgradeDowngradeHistory",
+                                    s.upgrade_downgrade_history.is_some(),
+                                ),
                                 ("calendarEvents", s.calendar_events.is_some()),
                                 ("insiderHolders", s.insider_holders.is_some()),
                                 ("insiderTransactions", s.insider_transactions.is_some()),
                                 ("majorHoldersBreakdown", s.major_holders_breakdown.is_some()),
                                 ("institutionOwnership", s.institution_ownership.is_some()),
                                 ("fundOwnership", s.fund_ownership.is_some()),
-                                ("netSharePurchaseActivity", s.net_share_purchase_activity.is_some()),
+                                (
+                                    "netSharePurchaseActivity",
+                                    s.net_share_purchase_activity.is_some(),
+                                ),
                                 ("fundProfile", s.fund_profile.is_some()),
                                 ("topHoldings", s.top_holdings.is_some()),
                                 ("secFilings", s.sec_filings.is_some()),

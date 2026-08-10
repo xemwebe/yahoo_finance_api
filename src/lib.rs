@@ -199,20 +199,18 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, AssetProfile, CalendarEarnings, CalendarEvents, CapitalGain,
-    CurrentTradingPeriod, DefaultKeyStatistics, Dividend, Earnings, EarningsChart,
-    EarningsChartQuarterly, EarningsEstimate, EarningsHistory, EarningsHistoryItem,
-    EarningsTrend, EarningsTrendItem, EpsRevisions, EpsTrend, ExtendedQuoteSummary,
-    FinancialData, FinancialEvent, FinancialsChart, FinancialsChartQuarterly,
-    FinancialsChartYearly, FundFeesExpenses, FundManagementInfo, FundOwnership,
-    FundOwnershipItem, FundProfile, FundValuation, GrowthEstimate, InsiderHolder,
+    AdjClose, AssetProfile, CalendarEarnings, CalendarEvents, CapitalGain, CurrentTradingPeriod,
+    DefaultKeyStatistics, Dividend, Earnings, EarningsChart, EarningsChartQuarterly,
+    EarningsEstimate, EarningsHistory, EarningsHistoryItem, EarningsTrend, EarningsTrendItem,
+    EpsRevisions, EpsTrend, ExtendedQuoteSummary, FinancialData, FinancialEvent, FinancialsChart,
+    FinancialsChartQuarterly, FinancialsChartYearly, FundFeesExpenses, FundManagementInfo,
+    FundOwnership, FundOwnershipItem, FundProfile, FundValuation, GrowthEstimate, InsiderHolder,
     InsiderHolders, InsiderTransaction, InsiderTransactions, InstitutionOwnership,
-    InstitutionOwnershipItem, MajorHoldersBreakdown, NetSharePurchaseActivity, PeriodInfo,
-    Quote, QuoteBlock, QuoteList, QuoteType, RawValue, RecommendationTrend,
-    RecommendationTrendItem, RevenueEstimate, SecFiling, SecFilingExhibit, SecFilings,
-    Split, SummaryDetail, TopHolding, TopHoldings, TradingPeriods, UpgradeDowngradeHistory,
-    UpgradeDowngradeItem, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
-    YSummaryData,
+    InstitutionOwnershipItem, MajorHoldersBreakdown, NetSharePurchaseActivity, PeriodInfo, Quote,
+    QuoteBlock, QuoteList, QuoteType, RawValue, RecommendationTrend, RecommendationTrendItem,
+    RevenueEstimate, SecFiling, SecFilingExhibit, SecFilings, Split, SummaryDetail, TopHolding,
+    TopHoldings, TradingPeriods, UpgradeDowngradeHistory, UpgradeDowngradeItem, YChart, YMetaData,
+    YQuoteBlock, YQuoteSummary, YResponse, YSummaryData,
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,

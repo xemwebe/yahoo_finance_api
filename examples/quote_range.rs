@@ -10,10 +10,7 @@ async fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
 
     // 1. Shorthand: a range string instead of explicit dates
-    let hist = provider
-        .get_quote_range("AAPL", "1d", "5d")
-        .await
-        .unwrap();
+    let hist = provider.get_quote_range("AAPL", "1d", "5d").await.unwrap();
     println!("range 5d: {} bars", hist.quotes().unwrap().len());
 
     // 2. Explicit start/end period with a custom interval
@@ -36,7 +33,10 @@ async fn main() {
         .get_quote_history_interval_prepost("AAPL", start, end, "1h", true)
         .await
         .unwrap();
-    println!("interval 1h + prepost: {} bars", hist.quotes().unwrap().len());
+    println!(
+        "interval 1h + prepost: {} bars",
+        hist.quotes().unwrap().len()
+    );
 
     // 4. With prepost=true the bars cover the pre-market (from 04:00 ET)
     //    and after-hours (until 20:00 ET) sessions, extending beyond the
@@ -82,7 +82,10 @@ fn main() {
     let hist = provider
         .get_quote_history_interval_prepost("AAPL", start, end, "1h", true)
         .unwrap();
-    println!("interval 1h + prepost: {} bars", hist.quotes().unwrap().len());
+    println!(
+        "interval 1h + prepost: {} bars",
+        hist.quotes().unwrap().len()
+    );
 
     // 4. With prepost=true the bars cover the pre-market (from 04:00 ET)
     //    and after-hours (until 20:00 ET) sessions, extending beyond the

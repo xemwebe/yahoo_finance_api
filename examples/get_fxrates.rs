@@ -19,8 +19,6 @@ fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    let quote_history = provider
-        .get_quote_history("EURUSD=X", start, end)
-        .unwrap();
+    let quote_history = provider.get_quote_history("EURUSD=X", start, end).unwrap();
     println!("Quote history of EUR/USD FX rate:\n{:#?}", quote_history);
 }
