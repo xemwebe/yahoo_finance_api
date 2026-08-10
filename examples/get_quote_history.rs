@@ -1,24 +1,24 @@
-#[cfg(not(feature = "blocking"))]
-use tokio_test;
+// Retrieve the full quote history of a ticker.
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
+#[tokio::main]
+async fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    tokio_test::block_on(provider.get_quote_history("VTI", start, end))
+    let quote_history = provider
+        .get_quote_history("VTI", start, end)
+        .await
+        .unwrap();
+    println!("Quote history of VTI:\n{:#?}", quote_history);
 }
 
 #[cfg(feature = "blocking")]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
+fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    provider.get_quote_history("VTI", start, end)
-}
-
-fn main() {
-    let quote_history = get_history().unwrap();
+    let quote_history = provider.get_quote_history("VTI", start, end).unwrap();
     println!("Quote history of VTI:\n{:#?}", quote_history);
 }

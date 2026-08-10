@@ -1,24 +1,26 @@
-#[cfg(not(feature = "blocking"))]
-use tokio_test;
+// Retrieve the historical EUR/USD exchange rate.
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
+#[tokio::main]
+async fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    tokio_test::block_on(provider.get_quote_history("EUR=x", start, end))
+    let quote_history = provider
+        .get_quote_history("EURUSD=X", start, end)
+        .await
+        .unwrap();
+    println!("Quote history of EUR/USD FX rate:\n{:#?}", quote_history);
 }
 
 #[cfg(feature = "blocking")]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
+fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
     let start = time::OffsetDateTime::UNIX_EPOCH;
     let end = time::OffsetDateTime::now_utc();
-    provider.get_quote_history("EUR=x", start, end)
-}
-
-fn main() {
-    let quote_history = get_history().unwrap();
-    println!("Quote history of USD/EUR FX rate:\n{:#?}", quote_history);
+    let quote_history = provider
+        .get_quote_history("EURUSD=X", start, end)
+        .unwrap();
+    println!("Quote history of EUR/USD FX rate:\n{:#?}", quote_history);
 }
