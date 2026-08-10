@@ -19,7 +19,7 @@ impl YahooConnector {
         self.get_quote_range(ticker, interval, "1mo").await
     }
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available
+    /// Retrieve the quote history for the given ticker from date start to end (inclusive), if available
     pub async fn get_quote_history(
         &self,
         ticker: &str,
@@ -47,7 +47,7 @@ impl YahooConnector {
         YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive), if available; specifying the interval of the ticker.
+    /// Retrieve the quote history for the given ticker from date start to end (inclusive), if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval(
         &self,
         ticker: &str,
@@ -66,7 +66,7 @@ impl YahooConnector {
         YResponse::from_json(self.send_request(&url).await?)?.map_error_msg()
     }
 
-    /// Retrieve the quote history for the given ticker form date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
+    /// Retrieve the quote history for the given ticker from date start to end (inclusive) and optionally before and after regular trading hours, if available; specifying the interval of the ticker.
     pub async fn get_quote_history_interval_prepost(
         &self,
         ticker: &str,
@@ -183,7 +183,7 @@ impl YahooConnector {
         Err(YahooError::NoResponse)
     }
 
-    /// Retrieve financial events(Earnings, Meeting, Call) dates for the given ticker with specified limit (max limit: 250),
+    /// Retrieve financial events (Earnings, Meeting, Call) dates for the given ticker with specified limit (max limit: 250),
     pub async fn get_financial_events(
         &mut self,
         ticker: &str,

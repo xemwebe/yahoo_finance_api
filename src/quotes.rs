@@ -72,6 +72,7 @@ impl YResponse {
         Ok(result)
     }
 
+    /// Deserialize a [`YResponse`] from a JSON value returned by the chart API.
     pub fn from_json(json: serde_json::Value) -> Result<YResponse, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
@@ -93,6 +94,8 @@ impl YResponse {
         Err(YahooError::NoQuotes)
     }
 
+    /// Return all valid quotes (open, high, low, close, volume) for the requested
+    /// time period. Quotes with missing fields are skipped.
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
         let stock = &self.check_historical_consistency()?[0];
 
@@ -108,6 +111,8 @@ impl YResponse {
         Ok(quotes)
     }
 
+    /// Return the metadata (symbol, exchange, timezone, trading periods, ...) of
+    /// the requested ticker.
     pub fn metadata(&self) -> Result<YMetaData, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
@@ -117,7 +122,7 @@ impl YResponse {
     }
 
     /// This method retrieves information about the splits that might have
-    /// occured during the considered time period
+    /// occurred during the considered time period
     pub fn splits(&self) -> Result<Vec<Split>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
@@ -137,7 +142,7 @@ impl YResponse {
     /// This method retrieves information about the dividends that have
     /// been recorded during the considered time period.
     ///
-    /// Note: Date is the ex-dividend date)
+    /// Note: date is the ex-dividend date
     pub fn dividends(&self) -> Result<Vec<Dividend>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
@@ -155,7 +160,7 @@ impl YResponse {
     }
 
     /// This method retrieves information about the capital gains that might have
-    /// occured during the considered time period (available only for Mutual Funds)
+    /// occurred during the considered time period (available only for Mutual Funds)
     pub fn capital_gains(&self) -> Result<Vec<CapitalGain>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
@@ -416,10 +421,10 @@ pub struct EventsBlock {
     pub capital_gains: Option<HashMap<i64, CapitalGain>>,
 }
 
-/// This structure simply models a split that has occured.
+/// This structure simply models a split that has occurred.
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct Split {
-    /// This is the date (timestamp) when the split occured
+    /// This is the date (timestamp) when the split occurred
     pub date: i64,
     /// Numerator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
@@ -481,6 +486,8 @@ pub struct ExtendedQuoteSummary {
 }
 
 impl YQuoteSummary {
+    /// Deserialize a [`YQuoteSummary`] from a JSON value returned by the
+    /// quoteSummary API.
     pub fn from_json(json: serde_json::Value) -> Result<YQuoteSummary, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
@@ -803,6 +810,7 @@ pub struct EarningsTrend {
 pub struct EarningsTrendItem {
     pub max_age: Option<i64>,
     pub period: Option<String>,
+    /// Period end date as a plain string (e.g. "2026-09-30"), not a timestamp.
     pub end_date: Option<String>,
     pub growth: Option<RawValue>,
     pub earnings_estimate: Option<EarningsEstimate>,
@@ -917,6 +925,7 @@ pub struct EarningsChart {
     pub current_quarter_estimate_year: Option<i64>,
     pub current_fiscal_quarter: Option<String>,
     pub current_period_end_date: Option<i64>,
+    /// Unix timestamps of the upcoming earnings dates.
     pub earnings_date: Option<Vec<i64>>,
     pub is_earnings_date_estimate: Option<bool>,
 }
@@ -929,7 +938,9 @@ pub struct EarningsChartQuarterly {
     pub estimate: Option<f64>,
     pub fiscal_quarter: Option<String>,
     pub calendar_quarter: Option<String>,
+    /// Difference between actual and estimate, as a string (e.g. "0.08").
     pub difference: Option<String>,
+    /// Surprise percentage, as a string (e.g. "4.52").
     pub surprise_pct: Option<String>,
     pub period_end_date: Option<i64>,
     pub reported_date: Option<i64>,
@@ -945,6 +956,8 @@ pub struct FinancialsChart {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FinancialsChartYearly {
+    /// Year as an integer (e.g. 2022), unlike the quarterly chart where the
+    /// date is a string such as "2Q2025".
     pub date: Option<i64>,
     pub revenue: Option<f64>,
     pub earnings: Option<f64>,
@@ -972,6 +985,7 @@ pub struct UpgradeDowngradeHistory {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeDowngradeItem {
+    /// Unix timestamp of the rating change.
     pub epoch_grade_date: Option<i64>,
     pub firm: Option<String>,
     pub to_grade: Option<String>,
@@ -988,14 +1002,18 @@ pub struct UpgradeDowngradeItem {
 pub struct CalendarEvents {
     pub max_age: Option<i64>,
     pub earnings: Option<CalendarEarnings>,
+    /// Unix timestamp of the ex-dividend date (absent for non-dividend tickers).
     pub ex_dividend_date: Option<i64>,
+    /// Unix timestamp of the dividend payment date.
     pub dividend_date: Option<i64>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEarnings {
+    /// Unix timestamps of the upcoming earnings dates.
     pub earnings_date: Option<Vec<i64>>,
+    /// Unix timestamps of the upcoming earnings call dates.
     pub earnings_call_date: Option<Vec<i64>>,
     pub is_earnings_date_estimate: Option<bool>,
     pub earnings_average: Option<f64>,
@@ -1170,7 +1188,10 @@ pub struct TopHoldings {
     pub holdings: Vec<TopHolding>,
     pub equity_holdings: Option<FundValuation>,
     pub bond_holdings: Option<FundValuation>,
+    /// Bond rating weights keyed by rating name (e.g. "us_government"); empty
+    /// for equity funds.
     pub bond_ratings: Vec<HashMap<String, f64>>,
+    /// Sector weights keyed by sector name (e.g. "technology", "realestate").
     pub sector_weightings: Vec<HashMap<String, f64>>,
 }
 

@@ -10,6 +10,14 @@
 //!
 //! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "1.0", features = ["blocking"]}`.
 //!
+//! # Features
+//!
+//! - `blocking`: provide a blocking (non-async) API via the `blocking_impl` module.
+//! - `governor`: rate-limit requests to avoid HTTP 429 responses. Defaults to
+//!   10 requests/second; configure via `YahooConnectorBuilder::rate_limit`.
+//! - `decimal`: represent prices as `rust_decimal::Decimal` instead of `f64`.
+//! - `debug`: include the full response body in deserialization error messages.
+//!
 #![cfg_attr(
     not(feature = "blocking"),
     doc = "
@@ -21,9 +29,9 @@ use tokio_test;
 
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
-    // get the latest quotes in 1 minute intervals
+    // get the latest quotes with the given interval
     let response = tokio_test::block_on(provider.get_latest_quotes(\"AAPL\", \"1d\")).unwrap();
-    // extract just the latest valid quote summery
+    // extract just the latest valid quote summary
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
@@ -96,9 +104,9 @@ use time::OffsetDateTime;
 
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
-    // get the latest quotes in 1 minute intervals
+    // get the latest quotes with the given interval
     let response = provider.get_latest_quotes(\"AAPL\", \"1d\").unwrap();
-    // extract just the latest valid quote summery
+    // extract just the latest valid quote summary
     // including timestamp,open,close,high,low,volume
     let quote = response.last_quote().unwrap();
     let time: OffsetDateTime =
@@ -283,6 +291,8 @@ impl YahooConnector {
         Self::builder().build()
     }
 
+    /// Create a new [`YahooConnectorBuilder`] to configure the connector
+    /// (timeout, user agent, proxy, rate limiting) before building it.
     pub fn builder() -> YahooConnectorBuilder {
         YahooConnectorBuilder {
             inner: Client::builder(),
@@ -308,20 +318,24 @@ impl YahooConnector {
 }
 
 impl YahooConnectorBuilder {
+    /// Create a new builder with the default settings.
     pub fn new() -> Self {
         YahooConnector::builder()
     }
 
+    /// Set the maximum time a single request may take before being aborted.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Set a custom `User-Agent` header for all requests.
     pub fn user_agent(mut self, user_agent: &str) -> Self {
         self.user_agent = Some(user_agent.to_string());
         self
     }
 
+    /// Route all requests through the given HTTP proxy.
     pub fn proxy(mut self, proxy: Proxy) -> Self {
         self.proxy = Some(proxy);
         self
@@ -335,6 +349,7 @@ impl YahooConnectorBuilder {
         self
     }
 
+    /// Build the [`YahooConnector`] with the configured options.
     pub fn build(mut self) -> Result<YahooConnector, YahooError> {
         if let Some(timeout) = &self.timeout {
             self.inner = self.inner.timeout(*timeout);
