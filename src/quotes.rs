@@ -95,7 +95,8 @@ impl YResponse {
     }
 
     /// Return all valid quotes (open, high, low, close, volume) for the requested
-    /// time period. Quotes with missing fields are skipped.
+    /// time period. Bars whose close is missing are skipped; other missing
+    /// fields within a bar are replaced by zero.
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
         let stock = &self.check_historical_consistency()?[0];
 
@@ -237,6 +238,7 @@ pub struct YMetaData {
     pub trading_periods: TradingPeriods,
     pub data_granularity: String,
     pub range: String,
+    #[serde(default)]
     pub valid_ranges: Vec<String>,
 }
 
@@ -493,6 +495,10 @@ impl YQuoteSummary {
     }
 }
 
+/// `quoteSummary` module: all 20 modules of the quoteSummary API (company
+/// profile, summary detail, financial data, recommendations, calendar,
+/// holders, fund profile, sec filings, ...). Only the modules that apply to
+/// the asset type are present, the rest is `None`.
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YSummaryData {
@@ -532,6 +538,7 @@ pub struct AssetProfile {
     pub sector: Option<String>,
     pub long_business_summary: Option<String>,
     pub full_time_employees: Option<u32>,
+    #[serde(default)]
     pub company_officers: Vec<CompanyOfficer>,
     pub audit_risk: Option<u16>,
     pub board_risk: Option<u16>,
@@ -783,6 +790,7 @@ pub struct RawValue {
 #[serde(rename_all = "camelCase")]
 pub struct RecommendationTrend {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub trend: Vec<RecommendationTrendItem>,
 }
 
@@ -802,6 +810,7 @@ pub struct RecommendationTrendItem {
 #[serde(rename_all = "camelCase")]
 pub struct EarningsTrend {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub trend: Vec<EarningsTrendItem>,
 }
 
@@ -889,6 +898,7 @@ pub struct GrowthEstimate {
 pub struct EarningsHistory {
     pub max_age: Option<i64>,
     pub default_methodology: Option<String>,
+    #[serde(default)]
     pub history: Vec<EarningsHistoryItem>,
 }
 
@@ -918,6 +928,7 @@ pub struct Earnings {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EarningsChart {
+    #[serde(default)]
     pub quarterly: Vec<EarningsChartQuarterly>,
     pub current_quarter_estimate: Option<f64>,
     pub current_quarter_estimate_date: Option<String>,
@@ -949,7 +960,9 @@ pub struct EarningsChartQuarterly {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FinancialsChart {
+    #[serde(default)]
     pub yearly: Vec<FinancialsChartYearly>,
+    #[serde(default)]
     pub quarterly: Vec<FinancialsChartQuarterly>,
 }
 
@@ -979,6 +992,7 @@ pub struct FinancialsChartQuarterly {
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeDowngradeHistory {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub history: Vec<UpgradeDowngradeItem>,
 }
 
@@ -1029,6 +1043,7 @@ pub struct CalendarEarnings {
 #[serde(rename_all = "camelCase")]
 pub struct InsiderHolders {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub holders: Vec<InsiderHolder>,
 }
 
@@ -1054,6 +1069,7 @@ pub struct InsiderHolder {
 #[serde(rename_all = "camelCase")]
 pub struct InsiderTransactions {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub transactions: Vec<InsiderTransaction>,
 }
 
@@ -1088,6 +1104,7 @@ pub struct MajorHoldersBreakdown {
 #[serde(rename_all = "camelCase")]
 pub struct InstitutionOwnership {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub ownership_list: Vec<InstitutionOwnershipItem>,
 }
 
@@ -1108,6 +1125,7 @@ pub struct InstitutionOwnershipItem {
 #[serde(rename_all = "camelCase")]
 pub struct FundOwnership {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub ownership_list: Vec<FundOwnershipItem>,
 }
 
@@ -1185,13 +1203,16 @@ pub struct TopHoldings {
     pub other_position: Option<f64>,
     pub preferred_position: Option<f64>,
     pub convertible_position: Option<f64>,
+    #[serde(default)]
     pub holdings: Vec<TopHolding>,
     pub equity_holdings: Option<FundValuation>,
     pub bond_holdings: Option<FundValuation>,
     /// Bond rating weights keyed by rating name (e.g. "us_government"); empty
     /// for equity funds.
+    #[serde(default)]
     pub bond_ratings: Vec<HashMap<String, f64>>,
     /// Sector weights keyed by sector name (e.g. "technology", "realestate").
+    #[serde(default)]
     pub sector_weightings: Vec<HashMap<String, f64>>,
 }
 
@@ -1217,6 +1238,7 @@ pub struct FundValuation {
 #[serde(rename_all = "camelCase")]
 pub struct SecFilings {
     pub max_age: Option<i64>,
+    #[serde(default)]
     pub filings: Vec<SecFiling>,
 }
 
@@ -1269,6 +1291,9 @@ pub struct YEarningsColumn {
     pub label: String,
 }
 
+/// A financial event (earnings, meeting or call) returned by
+/// [`crate::YahooConnector::get_financial_events`]. `event_type` is mapped
+/// from the raw API codes: "1" -> Call, "2" -> Earnings, "11" -> Meeting.
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FinancialEvent {

@@ -37,9 +37,17 @@ With the `blocking` feature enabled, all of the above methods are available on t
 [dependencies]
 yahoo_finance_api = "4.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+time = { version = "0.3", features = ["macros"] }
+reqwest = "0.13"
 ```
 
-`tokio` is only needed to run the async examples below.
+`tokio` is only needed to run the async examples below. `time` is used by
+the date-based examples (`datetime!` macro, `OffsetDateTime`); as an
+alternative the crate re-exports the `time` crate as `yahoo_finance_api::time`
+so no direct dependency is strictly required — but then the imports in the
+examples below need to be rewritten from `use time::...` to
+`use yahoo_finance_api::time::...`. `reqwest` is only needed for the
+custom-client and proxy examples.
 
 Minimum supported Rust version: 1.70. See [ReleaseNotes.md](ReleaseNotes.md) for the changelog.
 
@@ -50,7 +58,7 @@ Minimum supported Rust version: 1.70. See [ReleaseNotes.md](ReleaseNotes.md) for
 | `blocking` | blocking (non-async) API |
 | `governor` | proactive rate limiting, 10 requests/sec by default |
 | `decimal` | represent prices as `rust_decimal::Decimal` instead of `f64` |
-| `debug` | include the full response body in deserialization error messages |
+| `debug` | include the full response body in deserialization error messages (only when the error contains "expected value") |
 
 ## Usage
 
@@ -58,7 +66,9 @@ The examples below use `#[tokio::main]`; in a real application, any async runtim
 
 ### Quotes
 
-Get the latest quote:
+Get the latest quote. Note that `get_latest_quotes` actually returns the last
+**month** of quotes (it internally uses the `1mo` range); use
+`response.last_quote()` to extract the most recent one:
 
 ```rust
 use yahoo_finance_api as yahoo;
@@ -106,7 +116,11 @@ async fn main() {
 
 ### Corporate actions
 
-`YResponse` also exposes the dividends, splits and capital gains recorded in the requested period:
+`YResponse` also exposes the dividends, splits and capital gains recorded in the requested period
+(only for responses obtained via `get_quote_history*`/`get_quote_range`/`get_latest_quotes` —
+`get_quote_period_interval` does not request the `events` data, so these lists are always empty there).
+Note that Yahoo currently often omits the `capitalGains` event entirely, in which case
+`capital_gains()` returns an empty list:
 
 ```rust
 use yahoo_finance_api as yahoo;
@@ -125,7 +139,11 @@ Ready-to-run examples are in [`examples/`](examples/).
 
 ### Ticker info (fundamentals)
 
-`get_ticker_info` fetches detailed fundamental data about a ticker in a single request. The returned `YQuoteSummary` contains one `YSummaryData` per module; each module is `None` if Yahoo did not return it for that ticker (e.g. `fundProfile`/`topHoldings` exist only for funds and ETFs).
+`get_ticker_info` fetches detailed fundamental data about a ticker in a single request. It always
+requests all 20 modules, and the returned `YQuoteSummary` contains a single `YSummaryData` holding
+every module as an `Option` field; a module is `None` if Yahoo did not return it for that ticker
+(e.g. `fundProfile`/`topHoldings` exist only for funds and ETFs, and futures/currencies/indexes
+only get a small subset):
 
 ```rust
 use yahoo_finance_api as yahoo;
@@ -135,17 +153,30 @@ use tokio;
 async fn main() {
     let mut provider = yahoo::YahooConnector::new().unwrap();
     let result = provider.get_ticker_info("AAPL").await.unwrap();
-    let summary = result.quote_summary.unwrap().result.unwrap().remove(0);
+    // The modules that apply to the asset type; missing modules are None
+    let Some(summary) = result.quote_summary.and_then(|q| q.result).and_then(|mut r| r.pop()) else {
+        println!("no quote summary in response");
+        return;
+    };
 
     // Company profile, key statistics, financial data, ...
-    println!("City: {:?}", summary.asset_profile.unwrap().city);
+    if let Some(profile) = summary.asset_profile {
+        println!("City: {:?}", profile.city);
+    }
     // Analyst recommendations and estimates
-    println!("Recommendations: {:?}", summary.recommendation_trend.unwrap().trend);
+    if let Some(recs) = summary.recommendation_trend {
+        println!("Recommendations: {:?}", recs.trend);
+    }
     // Upcoming earnings / dividend dates
-    println!("Calendar: {:?}", summary.calendar_events.unwrap());
+    if let Some(calendar) = summary.calendar_events {
+        println!("Calendar: {:?}", calendar);
+    }
     // Top institutional holders
-    println!("Top holder: {:?}",
-        summary.institution_ownership.unwrap().ownership_list[0].organization);
+    if let Some(holders) = summary.institution_ownership {
+        if let Some(top) = holders.ownership_list.first() {
+            println!("Top holder: {:?}", top.organization);
+        }
+    }
 }
 ```
 
@@ -213,7 +244,7 @@ To prevent overwhelming the Yahoo! Finance API and avoid getting rate-limited (H
 yahoo_finance_api = { version = "4.2", features = ["governor"] }
 ```
 
-When enabled, `YahooConnector` defaults to **10 requests per second**. Override or disable it at runtime via the builder:
+When enabled, `YahooConnector` defaults to **10 requests per second**. Override or disable it at runtime via the builder (this API is only available when the `governor` feature is active):
 
 ```rust
 use yahoo_finance_api as yahoo;
@@ -232,6 +263,38 @@ fn main() {
     let provider = yahoo::YahooConnector::builder()
         .rate_limit(None)
         .build().unwrap();
+}
+```
+
+## Configuring the connector
+
+`YahooConnector` is built via `YahooConnectorBuilder`; start with
+`YahooConnector::builder()` (equivalent to `YahooConnectorBuilder::new()`)
+and configure the underlying HTTP client before calling `build()`:
+
+```rust
+use yahoo_finance_api as yahoo;
+use std::time::Duration;
+
+fn main() {
+    // Request timeout and custom user agent
+    let provider = yahoo::YahooConnector::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("my-app/1.0")
+        .build()
+        .unwrap();
+
+    // Route all requests through a proxy
+    let proxy = reqwest::Proxy::all("http://localhost:8080").unwrap();
+    let provider = yahoo::YahooConnector::builder()
+        .proxy(proxy)
+        .build()
+        .unwrap();
+
+    // Fully custom reqwest client. Note: with the `blocking` feature the
+    // builder accepts `reqwest::blocking::Client` instead
+    let client = reqwest::Client::builder().build().unwrap();
+    let provider = yahoo::YahooConnectorBuilder::build_with_client(client).unwrap();
 }
 ```
 
@@ -258,6 +321,7 @@ Supported quote intervals for a given range:
 | range | interval |
 |:-----:|:--------:|
 |  1d   | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
+|  5d   | 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
 |  1mo  | 2m, 3m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
 |  3mo  | 1h, 1d, 1wk, 1mo, 3mo |
 |  6mo  | 1h, 1d, 1wk, 1mo, 3mo |
@@ -268,14 +332,22 @@ Supported quote intervals for a given range:
 |  ytd  | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
 |  max  | 1m, 2m, 5m, 15m, 30m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo |
 
+Note: the table lists the historically accepted combinations. Intraday data
+is additionally constrained by time — `1m` is limited to roughly the last 8
+days, `2m`-`90m` to ~60 days, and `1h` to the last 730 days. For the long
+ranges (`ytd`, `max`) Yahoo in practice only serves daily and coarser
+intervals (`1d`, `5d`, `1wk`, `1mo`, `3mo`) and rejects the rest with an
+`ApiError`.
+
 ## Error handling
 
 All methods return `Result<_, YahooError>`. The errors fall into a few categories:
 
-- Transport: `ConnectionFailed`, `FetchFailed`
-- Yahoo API: `ApiError`, `Unauthorized`, `InvalidCrumb`, `InvalidCookie`, `NoCookies`, `TooManyRequests`
+- Transport: `ConnectionFailed` (any reqwest error), `FetchFailed`, `NoResponse`, `InvalidUrl`, `InvalidDateFormat`
+- Yahoo API: `ApiError`, `Unauthorized`, `InvalidCrumb`, `InvalidCookie`, `NoCookies`, `TooManyRequests`, `InvisibleAsciiInCookies`
 - Empty or inconsistent data: `NoResult`, `NoQuotes`, `DataInconsistency`, `MissingField`
-- Deserialization: `DeserializeFailed`; with the `debug` feature, `DeserializeFailedDebug` includes the full response body
+- Deserialization: `DeserializeFailed`; with the `debug` feature, `DeserializeFailedDebug` includes the response body (only when the error contains "expected value")
+- Client setup: `BuilderFailed` (reserved, currently not constructed)
 
 ## Contributing
 

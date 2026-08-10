@@ -4,7 +4,7 @@
 //! [yahoo! finance](https://finance.yahoo.com) website via their API. This project
 //! is licensed under Apache 2.0 or MIT license (see files LICENSE-Apache2.0 and LICENSE-MIT).
 //!
-//! Since version 0.3 and the upgrade to ```reqwest``` 0.10, all requests to the yahoo API return futures, using ```async``` features.
+//! Since version 0.3, all requests to the yahoo API return futures, using `async` features (the upgrade to `reqwest` 0.13 arrived in 4.1.1).
 //! Therefore, the functions need to be called from within another ```async``` function with ```.await``` (e.g. via `#[tokio::main]`).
 //! The examples below are based on the ```tokio``` runtime.
 //!
@@ -16,13 +16,14 @@
 //! - `governor`: rate-limit requests to avoid HTTP 429 responses. Defaults to
 //!   10 requests/second; configure via `YahooConnectorBuilder::rate_limit`.
 //! - `decimal`: represent prices as `rust_decimal::Decimal` instead of `f64`.
-//! - `debug`: include the full response body in deserialization error messages.
+//! - `debug`: include the full response body in deserialization error
+//!   messages (only when the error contains "expected value").
 //!
 #![cfg_attr(
     not(feature = "blocking"),
     doc = "
 # Get the latest available quote:
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 use time::OffsetDateTime;
 use tokio;
@@ -41,9 +42,9 @@ async fn main() {
 }
 ```
 # Get history of quotes for given time period:
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
-use time::{macros::datetime, OffsetDateTime};
+use time::macros::datetime;
 use tokio;
 
 #[tokio::main]
@@ -60,7 +61,7 @@ async fn main() {
 # Get the history of quotes for time range
 Another method to retrieve a range of quotes is by requesting the quotes for a given period and
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 use tokio;
 
@@ -74,7 +75,7 @@ async fn main() {
 ```
 
 # Search for a ticker given a search string (e.g. company name):
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 use tokio;
 
@@ -101,7 +102,7 @@ returning `None` if the field found missing in the response.
     feature = "blocking",
     doc = "
 # Get the latest available quote (with blocking feature enabled):
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 use time::OffsetDateTime;
 
@@ -118,9 +119,9 @@ fn main() {
 }
 ```
 # Get history of quotes for given time period:
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
-use time::{macros::datetime, OffsetDateTime};
+use time::macros::datetime;
 
 fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
@@ -136,7 +137,7 @@ fn main() {
 # Get the history of quotes for time range
 Another method to retrieve a range of quotes is by requesting the quotes for a given period and
 lookup frequency. Here is an example retrieving the daily quotes for the last month:
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 
 fn main() {
@@ -147,7 +148,7 @@ fn main() {
 }
 ```
 # Search for a ticker given a search string (e.g. company name):
-```rust
+```ignore
 use yahoo_finance_api as yahoo;
 
 fn main() {
@@ -277,6 +278,10 @@ pub struct YahooConnector {
     rate_limiter: Option<Arc<YRateLimiter>>,
 }
 
+/// Builder for configuring a [`YahooConnector`] (timeout, user agent, proxy,
+/// rate limit) before the HTTP client is created. Start with
+/// [`YahooConnectorBuilder::new`] or [`YahooConnector::builder`], then call
+/// [`YahooConnectorBuilder::build`].
 #[derive(Default)]
 pub struct YahooConnectorBuilder {
     inner: ClientBuilder,

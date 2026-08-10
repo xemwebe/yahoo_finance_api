@@ -12,11 +12,13 @@ pub enum YahooError {
     #[error("deserializing response from yahoo! finance failed: {0}")]
     DeserializeFailed(#[from] serde_json::Error),
 
-    /// The response could not be deserialized; the full response body is attached.
+    /// The response could not be deserialized; the full response body is
+    /// attached (only with the `debug` feature and only when the
+    /// deserialization error contains "expected value").
     #[error("deserializing response from yahoo! finance failed, full response body: {0}")]
     DeserializeFailedDebug(String),
 
-    /// The connection to yahoo! finance failed.
+    /// A request to yahoo! finance failed (network, TLS, timeout, ...).
     #[error("connection to yahoo! finance server failed: {0}")]
     ConnectionFailed(#[from] reqwest::Error),
     /// yahoo! finance returned an API-level error.
@@ -31,7 +33,7 @@ pub enum YahooError {
     /// The response data was structurally inconsistent (e.g. mismatched array lengths).
     #[error("yahoo! finance returned inconsistent data")]
     DataInconsistency,
-    /// Building the HTTP client failed.
+    /// Building the HTTP client failed (reserved, currently not constructed).
     #[error("constructing yahoo! finance client failed")]
     BuilderFailed,
     /// No cookies were found in the response headers.

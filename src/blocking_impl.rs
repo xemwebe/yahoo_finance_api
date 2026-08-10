@@ -122,7 +122,9 @@ impl YahooConnector {
         Ok(YSearchResult::from_opt(&result))
     }
 
-    // Get symbol metadata
+    /// Retrieve the quoteSummary modules (company profile, recommendations,
+    /// calendar, holders, financials, ...) for the given symbol. Requires
+    /// `&mut self` because the crumb/cookie used for authentication is cached.
     pub fn get_ticker_info(&mut self, symbol: &str) -> Result<YQuoteSummary, YahooError> {
         if self.crumb.is_none() {
             self.crumb = Some(self.get_crumb()?);
@@ -137,43 +139,48 @@ impl YahooConnector {
             self.wait_for_rate_limit_blocking();
 
             // Build URL inside loop to use fresh crumb after refresh
-            let url = reqwest::Url::parse(
-                &(format!(
-                    YQUOTE_SUMMARY_QUERY!(),
-                    symbol = symbol,
-                    crumb = self.crumb.as_ref().unwrap()
-                )),
-            );
+            let url = reqwest::Url::parse(&(format!(
+                YQUOTE_SUMMARY_QUERY!(),
+                symbol = symbol,
+                crumb = self.crumb.as_ref().unwrap()
+            )))
+            .map_err(|_| YahooError::InvalidUrl)?;
 
             let text = self
                 .create_client()?
-                .get(url.unwrap())
+                .get(url)
                 .header("Cookie", self.cookie_header_value())
                 .send()?
                 .text()?;
 
             let result: YQuoteSummary = serde_json::from_str(&text)?;
 
-            if let Some(finance) = &result.finance {
-                if let Some(error) = &finance.error {
-                    if let Some(description) = &error.description {
-                        if description.contains("Invalid Crumb") {
-                            self.crumb = Some(self.get_crumb()?);
-                            if i == max_retries {
-                                return Err(YahooError::InvalidCrumb);
-                            } else {
-                                continue;
-                            }
+            // The v8 API reports errors in `finance.error`, the v10
+            // quoteSummary API in `quoteSummary.error`
+            let api_error = result
+                .finance
+                .as_ref()
+                .and_then(|f| f.error.as_ref())
+                .or_else(|| result.quote_summary.as_ref().and_then(|q| q.error.as_ref()));
+
+            if let Some(error) = api_error {
+                if let Some(description) = &error.description {
+                    if description.contains("Invalid Crumb") {
+                        self.crumb = Some(self.get_crumb()?);
+                        if i == max_retries {
+                            return Err(YahooError::InvalidCrumb);
+                        } else {
+                            continue;
                         }
                     }
-                    if let Some(code) = &error.code {
-                        if code.contains("Unauthorized") {
-                            self.crumb = Some(self.get_crumb()?);
-                            if i == max_retries {
-                                return Err(YahooError::Unauthorized);
-                            } else {
-                                continue;
-                            }
+                }
+                if let Some(code) = &error.code {
+                    if code.contains("Unauthorized") {
+                        self.crumb = Some(self.get_crumb()?);
+                        if i == max_retries {
+                            return Err(YahooError::Unauthorized);
+                        } else {
+                            continue;
                         }
                     }
                 }
@@ -184,7 +191,7 @@ impl YahooConnector {
         Err(YahooError::NoResponse)
     }
 
-    /// Retrieve earnings dates for the given ticker with specified limit (max limit: 250)
+    /// Retrieve financial events (Earnings, Meeting, Call) dates for the given ticker with specified limit (max limit: 250)
     pub fn get_financial_events(
         &mut self,
         ticker: &str,

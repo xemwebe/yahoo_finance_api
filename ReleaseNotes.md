@@ -8,6 +8,16 @@
 + Fix: cookie header sends only name=value, not raw Set-Cookie attributeg
 + Fix: stale crumb in URL after Invalid Crumb refresh
 + Add https_only(true) for security
++ new method: `get_ticker_info(symbol)` returns all 20 quoteSummary modules (assetProfile,
+  summaryDetail, defaultKeyStatistics, quoteType, financialData, recommendationTrend,
+  earningsTrend, earningsHistory, earnings, upgradeDowngradeHistory, calendarEvents,
+  insiderHolders, insiderTransactions, majorHoldersBreakdown, institutionOwnership,
+  fundOwnership, netSharePurchaseActivity, fundProfile, topHoldings, secFilings)
++ quoteSummary modules tolerate missing or empty list fields (serde default)
++ new method: `YQuoteSummary::from_json` for offline deserialization
++ error handling: quoteSummary API errors (v10) trigger the crumb/Unauthorized retry;
+  invalid URLs are reported as `YahooError::InvalidUrl` instead of panicking
++ expand the examples suite (16 examples: ticker_info, quote_range, errors, search_opt, ...)
 
 ## Release 4.1.1
 + security update for dependencies

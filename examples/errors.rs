@@ -13,6 +13,52 @@ fn report(err: &yahoo::YahooError) {
     }
 }
 
+fn offline_errors() {
+    // 4. NoResult without the network: quotes() on an empty chart result
+    let json = serde_json::json!({"chart": {"result": null, "error": null}});
+    let response = yahoo::YResponse::from_json(json).unwrap();
+    if let Err(err) = response.quotes() {
+        report(&err);
+    }
+
+    // 5. NoQuotes without the network: a result with no timestamps
+    let json = serde_json::json!({
+        "chart": {
+            "result": [{
+                "meta": {
+                    "symbol": "AAPL",
+                    "instrumentType": "EQUITY",
+                    "exchangeName": "NMS",
+                    "fullExchangeName": "NasdaqGS",
+                    "gmtoffset": -14400,
+                    "timezone": "EDT",
+                    "exchangeTimezoneName": "America/New_York",
+                    "hasPrePostMarketData": true,
+                    "priceHint": 2,
+                    "dataGranularity": "1d",
+                    "range": "5d",
+                    "currentTradingPeriod": {
+                        "pre": {"timezone": "EDT", "start": 0, "end": 0, "gmtoffset": -14400},
+                        "regular": {"timezone": "EDT", "start": 0, "end": 0, "gmtoffset": -14400},
+                        "post": {"timezone": "EDT", "start": 0, "end": 0, "gmtoffset": -14400}
+                    }
+                },
+                "timestamp": [],
+                "indicators": {"quote": []}
+            }],
+            "error": null
+        }
+    });
+    match yahoo::YResponse::from_json(json) {
+        Ok(response) => {
+            if let Err(err) = response.quotes() {
+                report(&err);
+            }
+        }
+        Err(err) => report(&err),
+    }
+}
+
 #[cfg(not(feature = "blocking"))]
 #[tokio::main]
 async fn main() {
@@ -30,19 +76,19 @@ async fn main() {
         Err(err) => report(&err),
     }
 
-    // 3. Unsupported combination: intraday 1m interval over a long period
-    //    (usually rejected by the API)
+    // 3. Unsupported combination: intraday 1m interval over a long period.
+    //    Yahoo either rejects it with an ApiError or returns truncated data
+    //    (the 1m granularity is limited to roughly the last 8 days)
     match provider.get_quote_range("AAPL", "1m", "1y").await {
-        Ok(_) => println!("unexpected success"),
+        Ok(hist) => {
+            if let Ok(quotes) = hist.quotes() {
+                println!("AAPL: {} bars (truncated)", quotes.len());
+            }
+        }
         Err(err) => report(&err),
     }
 
-    // 4. NoResult without the network: quotes() on an empty chart result
-    let json = serde_json::json!({"chart": {"result": null, "error": null}});
-    let response = yahoo::YResponse::from_json(json).unwrap();
-    if let Err(err) = response.quotes() {
-        report(&err);
-    }
+    offline_errors();
 }
 
 #[cfg(feature = "blocking")]
@@ -61,17 +107,17 @@ fn main() {
         Err(err) => report(&err),
     }
 
-    // 3. Unsupported combination: intraday 1m interval over a long period
-    //    (usually rejected by the API)
+    // 3. Unsupported combination: intraday 1m interval over a long period.
+    //    Yahoo either rejects it with an ApiError or returns truncated data
+    //    (the 1m granularity is limited to roughly the last 8 days)
     match provider.get_quote_range("AAPL", "1m", "1y") {
-        Ok(_) => println!("unexpected success"),
+        Ok(hist) => {
+            if let Ok(quotes) = hist.quotes() {
+                println!("AAPL: {} bars (truncated)", quotes.len());
+            }
+        }
         Err(err) => report(&err),
     }
 
-    // 4. NoResult without the network: quotes() on an empty chart result
-    let json = serde_json::json!({"chart": {"result": null, "error": null}});
-    let response = yahoo::YResponse::from_json(json).unwrap();
-    if let Err(err) = response.quotes() {
-        report(&err);
-    }
+    offline_errors();
 }

@@ -31,8 +31,14 @@ async fn main() {
     let mut quote_name = String::new();
     std::io::stdin().read_line(&mut quote_name).unwrap();
     let quote_name = quote_name.trim();
-    let quote = get_quote(quote_name).await.unwrap();
-    println!("Most recent price of {quote_name} is {quote}");
+    if quote_name.is_empty() {
+        println!("no ticker provided");
+        return;
+    }
+    match get_quote(quote_name).await {
+        Ok(quote) => println!("Most recent price of {quote_name} is {quote}"),
+        Err(err) => println!("failed to fetch {quote_name}: {err:?}"),
+    }
 }
 
 #[cfg(feature = "blocking")]
@@ -42,6 +48,12 @@ fn main() {
     let mut quote_name = String::new();
     std::io::stdin().read_line(&mut quote_name).unwrap();
     let quote_name = quote_name.trim();
-    let quote = get_quote(quote_name).unwrap();
-    println!("Most recent price of {quote_name} is {quote}");
+    if quote_name.is_empty() {
+        println!("no ticker provided");
+        return;
+    }
+    match get_quote(quote_name) {
+        Ok(quote) => println!("Most recent price of {quote_name} is {quote}"),
+        Err(err) => println!("failed to fetch {quote_name}: {err:?}"),
+    }
 }
