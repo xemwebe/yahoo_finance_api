@@ -19,7 +19,7 @@ impl YahooConnector {
         }
     }
 
-    /// Retrieve the quotes of the last day for the given ticker
+    /// Retrieve the quotes of the last month for the given ticker
     pub fn get_latest_quotes(&self, ticker: &str, interval: &str) -> Result<YResponse, YahooError> {
         self.get_quote_range(ticker, interval, "1mo")
     }
@@ -424,7 +424,7 @@ impl YahooConnector {
         })
     }
 
-    /// Get only earnings events (filter out meetings)
+    /// Get only earnings events (filter out all non-earnings events, e.g. meetings and calls)
     pub fn get_earnings_only(
         &mut self,
         ticker: &str,

@@ -10,7 +10,7 @@ impl YahooConnector {
         }
     }
 
-    /// Retrieve the quotes of the last day for the given ticker
+    /// Retrieve the quotes of the last month for the given ticker
     pub async fn get_latest_quotes(
         &self,
         ticker: &str,
@@ -424,7 +424,7 @@ impl YahooConnector {
         })
     }
 
-    /// Get only earnings events (filter out meetings)
+    /// Get only earnings events (filter out all non-earnings events, e.g. meetings and calls)
     pub async fn get_earnings_only(
         &mut self,
         ticker: &str,
