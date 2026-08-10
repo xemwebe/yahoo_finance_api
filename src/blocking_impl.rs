@@ -985,7 +985,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_earnings_dates() {
+    fn test_get_financial_events() {
         let mut provider = YahooConnector::new().unwrap();
         let limit = 100;
         let result = provider.get_financial_events("AAPL", limit);
