@@ -188,10 +188,20 @@ mod quotes;
 mod search_result;
 mod yahoo_error;
 pub use quotes::{
-    AdjClose, AssetProfile, CapitalGain, CurrentTradingPeriod, DefaultKeyStatistics, Dividend,
-    ExtendedQuoteSummary, FinancialData, FinancialEvent, PeriodInfo, Quote, QuoteBlock, QuoteList,
-    QuoteType, Split, SummaryDetail, TradingPeriods, YChart, YMetaData, YQuoteBlock, YQuoteSummary,
-    YResponse, YSummaryData,
+    AdjClose, AssetProfile, CalendarEarnings, CalendarEvents, CapitalGain,
+    CurrentTradingPeriod, DefaultKeyStatistics, Dividend, Earnings, EarningsChart,
+    EarningsChartQuarterly, EarningsEstimate, EarningsHistory, EarningsHistoryItem,
+    EarningsTrend, EarningsTrendItem, EpsRevisions, EpsTrend, ExtendedQuoteSummary,
+    FinancialData, FinancialEvent, FinancialsChart, FinancialsChartQuarterly,
+    FinancialsChartYearly, FundFeesExpenses, FundManagementInfo, FundOwnership,
+    FundOwnershipItem, FundProfile, FundValuation, GrowthEstimate, InsiderHolder,
+    InsiderHolders, InsiderTransaction, InsiderTransactions, InstitutionOwnership,
+    InstitutionOwnershipItem, MajorHoldersBreakdown, NetSharePurchaseActivity, PeriodInfo,
+    Quote, QuoteBlock, QuoteList, QuoteType, RawValue, RecommendationTrend,
+    RecommendationTrendItem, RevenueEstimate, SecFiling, SecFilingExhibit, SecFilings,
+    Split, SummaryDetail, TopHolding, TopHoldings, TradingPeriods, UpgradeDowngradeHistory,
+    UpgradeDowngradeItem, YChart, YMetaData, YQuoteBlock, YQuoteSummary, YResponse,
+    YSummaryData,
 };
 pub use search_result::{
     YNewsItem, YOptionChain, YOptionChainData, YOptionChainResult, YOptionContract, YOptionDetails,
@@ -237,7 +247,7 @@ macro_rules! YTICKER_QUERY {
 }
 macro_rules! YQUOTE_SUMMARY_QUERY {
     () => {
-        "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
+        "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail,recommendationTrend,earningsTrend,earningsHistory,earnings,upgradeDowngradeHistory,calendarEvents,insiderHolders,insiderTransactions,majorHoldersBreakdown,institutionOwnership,fundOwnership,netSharePurchaseActivity,fundProfile,topHoldings,secFilings&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
     }
 }
 macro_rules! YEARNINGS_QUERY {

@@ -811,6 +811,250 @@ mod tests {
         );
     }
 
+    fn fetch_summary(provider: &mut YahooConnector, symbol: &str) -> YSummaryData {
+        let result = tokio_test::block_on(provider.get_ticker_info(symbol)).unwrap();
+        result.quote_summary.unwrap().result.unwrap().remove(0)
+    }
+
+    #[test]
+    fn test_module_recommendation_trend() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let trend = s.recommendation_trend.expect("recommendationTrend module");
+        assert!(!trend.trend.is_empty());
+        assert!(trend.trend[0].strong_buy.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings_trend() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let trend = s.earnings_trend.expect("earningsTrend module");
+        assert!(!trend.trend.is_empty());
+        let item = &trend.trend[0];
+        assert!(item.earnings_estimate.is_some() || item.revenue_estimate.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings_history() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let history = s.earnings_history.expect("earningsHistory module");
+        assert!(!history.history.is_empty());
+        assert!(history.history[0].period.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let earnings = s.earnings.expect("earnings module");
+        let chart = earnings.earnings_chart.expect("earningsChart");
+        assert!(!chart.quarterly.is_empty());
+        assert!(earnings.financials_chart.is_some());
+    }
+
+    #[test]
+    fn test_module_upgrade_downgrade_history() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let history = s
+            .upgrade_downgrade_history
+            .expect("upgradeDowngradeHistory module");
+        assert!(!history.history.is_empty());
+        assert!(history.history[0].firm.is_some());
+    }
+
+    #[test]
+    fn test_module_calendar_events() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let events = s.calendar_events.expect("calendarEvents module");
+        assert!(events.earnings.is_some());
+        assert!(events.dividend_date.is_some() || events.ex_dividend_date.is_some());
+    }
+
+    #[test]
+    fn test_module_insider_holders() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let holders = s.insider_holders.expect("insiderHolders module");
+        assert!(!holders.holders.is_empty());
+        assert!(holders.holders[0].name.is_some());
+    }
+
+    #[test]
+    fn test_module_insider_transactions() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let transactions = s
+            .insider_transactions
+            .expect("insiderTransactions module");
+        assert!(!transactions.transactions.is_empty());
+        assert!(transactions.transactions[0].filer_name.is_some());
+    }
+
+    #[test]
+    fn test_module_major_holders_breakdown() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let breakdown = s
+            .major_holders_breakdown
+            .expect("majorHoldersBreakdown module");
+        assert!(breakdown.institutions_count.is_some());
+    }
+
+    #[test]
+    fn test_module_institution_ownership() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let ownership = s.institution_ownership.expect("institutionOwnership module");
+        assert!(!ownership.ownership_list.is_empty());
+        assert!(ownership.ownership_list[0].organization.is_some());
+    }
+
+    #[test]
+    fn test_module_fund_ownership() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let ownership = s.fund_ownership.expect("fundOwnership module");
+        assert!(!ownership.ownership_list.is_empty());
+    }
+
+    #[test]
+    fn test_module_net_share_purchase_activity() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let activity = s
+            .net_share_purchase_activity
+            .expect("netSharePurchaseActivity module");
+        assert!(activity.period.is_some());
+    }
+
+    #[test]
+    fn test_module_sec_filings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let filings = s.sec_filings.expect("secFilings module");
+        assert!(!filings.filings.is_empty());
+        assert!(filings.filings[0].filing_type.is_some());
+    }
+
+    #[test]
+    fn test_module_fund_profile() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "VOO");
+        let profile = s.fund_profile.expect("fundProfile module");
+        assert!(profile.family.is_some());
+        assert!(profile.fees_expenses_investment.is_some());
+    }
+
+    #[test]
+    fn test_module_top_holdings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "VOO");
+        let holdings = s.top_holdings.expect("topHoldings module");
+        assert!(!holdings.holdings.is_empty());
+        assert!(holdings.holdings[0].symbol.is_some());
+        assert!(!holdings.sector_weightings.is_empty());
+    }
+
+    /// Smoke test across a wide basket of tickers: different asset types return
+    /// different quoteSummary formats (or none at all). Verifies that the WHOLE
+    /// response strictly deserializes without errors — a failure in any module
+    /// breaks the entire `get_ticker_info` call. Run manually (not in CI):
+    /// `cargo test --lib test_all_asset_types -- --ignored`
+    /// Async only: blocking uses the same YSummaryData structs and the same
+    /// `YQuoteSummary::from_json`, so the coverage is identical.
+    #[ignore]
+    #[test]
+    fn test_all_asset_types() {
+        // Stocks (regular): AAPL, MSFT
+        // ADR: BABA (Alibaba, China), TSM (Taiwan Semiconductor, Taiwan)
+        // ETFs: VOO, SPY, QQQ, TQQQ (3x leveraged)
+        // Mutual funds: VTSAX, VFIAX, FSKAX, AMAGX
+        // Futures: CL=F (WTI crude), GC=F (gold), ES=F (S&P 500), NQ=F (Nasdaq)
+        // Currencies (spot, =X): EURUSD=X, GBPUSD=X, USDJPY=X, USDCAD=X
+        // Crypto: BTC-USD, ETH-USD
+        // Indexes: ^GSPC (S&P 500), ^VIX (volatility), ^IXIC (Nasdaq)
+        // Treasuries/bonds: ^TNX (10-year yield), BND (bond ETF)
+        // REITs: VNQ, O (Realty Income)
+        // Foreign listings: HNL.DE (Germany), 7203.T (Tokyo)
+        // IPO/small cap: RDDT (Reddit), ARM
+        let symbols = [
+            "AAPL", "MSFT", "BABA", "TSM", "VOO", "SPY", "QQQ", "TQQQ", "VTSAX", "VFIAX",
+            "FSKAX", "AMAGX", "CL=F", "GC=F", "ES=F", "NQ=F", "EURUSD=X", "GBPUSD=X",
+            "USDJPY=X", "USDCAD=X", "BTC-USD", "ETH-USD", "^GSPC", "^VIX", "^IXIC", "^TNX",
+            "BND", "VNQ", "O", "HNL.DE", "7203.T", "RDDT", "ARM",
+        ];
+        let mut report = String::new();
+        let mut failed: Vec<(String, String)> = Vec::new();
+        for symbol in symbols {
+            let mut provider = YahooConnector::new().unwrap();
+            let result = tokio_test::block_on(provider.get_ticker_info(symbol));
+            match result {
+                Ok(summary) => match summary.quote_summary {
+                    Some(quote_summary) => match quote_summary.result {
+                        Some(mut result) => {
+                            let s = result.remove(0);
+                            let present = [
+                                ("assetProfile", s.asset_profile.is_some()),
+                                ("summaryDetail", s.summary_detail.is_some()),
+                                ("defaultKeyStatistics", s.default_key_statistics.is_some()),
+                                ("quoteType", s.quote_type.is_some()),
+                                ("financialData", s.financial_data.is_some()),
+                                ("recommendationTrend", s.recommendation_trend.is_some()),
+                                ("earningsTrend", s.earnings_trend.is_some()),
+                                ("earningsHistory", s.earnings_history.is_some()),
+                                ("earnings", s.earnings.is_some()),
+                                ("upgradeDowngradeHistory", s.upgrade_downgrade_history.is_some()),
+                                ("calendarEvents", s.calendar_events.is_some()),
+                                ("insiderHolders", s.insider_holders.is_some()),
+                                ("insiderTransactions", s.insider_transactions.is_some()),
+                                ("majorHoldersBreakdown", s.major_holders_breakdown.is_some()),
+                                ("institutionOwnership", s.institution_ownership.is_some()),
+                                ("fundOwnership", s.fund_ownership.is_some()),
+                                ("netSharePurchaseActivity", s.net_share_purchase_activity.is_some()),
+                                ("fundProfile", s.fund_profile.is_some()),
+                                ("topHoldings", s.top_holdings.is_some()),
+                                ("secFilings", s.sec_filings.is_some()),
+                            ];
+                            let modules: Vec<&str> = present
+                                .iter()
+                                .filter(|(_, present)| *present)
+                                .map(|(name, _)| *name)
+                                .collect();
+                            report.push_str(&format!("{:>10}: {}\n", symbol, modules.join(", ")));
+                        }
+                        None => {
+                            let error = quote_summary.error.map_or_else(
+                                || "no result and no error".to_string(),
+                                |e| format!("{:?}", e),
+                            );
+                            report.push_str(&format!("{:>10}: NO RESULT ({})\n", symbol, error));
+                            failed.push((symbol.to_string(), format!("no result: {}", error)));
+                        }
+                    },
+                    None => {
+                        report.push_str(&format!("{:>10}: EMPTY RESPONSE\n", symbol));
+                        failed.push((symbol.to_string(), "empty response".to_string()));
+                    }
+                },
+                Err(e) => {
+                    report.push_str(&format!("{:>10}: FAILED {:?}\n", symbol, e));
+                    failed.push((symbol.to_string(), format!("{:?}", e)));
+                }
+            }
+        }
+        println!("=== quoteSummary modules per asset type ===\n{}", report);
+        assert!(
+            failed.is_empty(),
+            "get_ticker_info failed for {} symbol(s): {:?}",
+            failed.len(),
+            failed
+        );
+    }
+
     #[tokio::test]
     async fn test_get_crumb() {
         let mut provider = YahooConnector::new().unwrap();

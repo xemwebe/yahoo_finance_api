@@ -790,6 +790,154 @@ mod tests {
         );
     }
 
+    fn fetch_summary(provider: &mut YahooConnector, symbol: &str) -> YSummaryData {
+        let result = provider.get_ticker_info(symbol).unwrap();
+        result.quote_summary.unwrap().result.unwrap().remove(0)
+    }
+
+    #[test]
+    fn test_module_recommendation_trend() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let trend = s.recommendation_trend.expect("recommendationTrend module");
+        assert!(!trend.trend.is_empty());
+        assert!(trend.trend[0].strong_buy.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings_trend() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let trend = s.earnings_trend.expect("earningsTrend module");
+        assert!(!trend.trend.is_empty());
+        let item = &trend.trend[0];
+        assert!(item.earnings_estimate.is_some() || item.revenue_estimate.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings_history() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let history = s.earnings_history.expect("earningsHistory module");
+        assert!(!history.history.is_empty());
+        assert!(history.history[0].period.is_some());
+    }
+
+    #[test]
+    fn test_module_earnings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let earnings = s.earnings.expect("earnings module");
+        let chart = earnings.earnings_chart.expect("earningsChart");
+        assert!(!chart.quarterly.is_empty());
+        assert!(earnings.financials_chart.is_some());
+    }
+
+    #[test]
+    fn test_module_upgrade_downgrade_history() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let history = s
+            .upgrade_downgrade_history
+            .expect("upgradeDowngradeHistory module");
+        assert!(!history.history.is_empty());
+        assert!(history.history[0].firm.is_some());
+    }
+
+    #[test]
+    fn test_module_calendar_events() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let events = s.calendar_events.expect("calendarEvents module");
+        assert!(events.earnings.is_some());
+        assert!(events.dividend_date.is_some() || events.ex_dividend_date.is_some());
+    }
+
+    #[test]
+    fn test_module_insider_holders() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let holders = s.insider_holders.expect("insiderHolders module");
+        assert!(!holders.holders.is_empty());
+        assert!(holders.holders[0].name.is_some());
+    }
+
+    #[test]
+    fn test_module_insider_transactions() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let transactions = s
+            .insider_transactions
+            .expect("insiderTransactions module");
+        assert!(!transactions.transactions.is_empty());
+        assert!(transactions.transactions[0].filer_name.is_some());
+    }
+
+    #[test]
+    fn test_module_major_holders_breakdown() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let breakdown = s
+            .major_holders_breakdown
+            .expect("majorHoldersBreakdown module");
+        assert!(breakdown.institutions_count.is_some());
+    }
+
+    #[test]
+    fn test_module_institution_ownership() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let ownership = s.institution_ownership.expect("institutionOwnership module");
+        assert!(!ownership.ownership_list.is_empty());
+        assert!(ownership.ownership_list[0].organization.is_some());
+    }
+
+    #[test]
+    fn test_module_fund_ownership() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let ownership = s.fund_ownership.expect("fundOwnership module");
+        assert!(!ownership.ownership_list.is_empty());
+    }
+
+    #[test]
+    fn test_module_net_share_purchase_activity() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let activity = s
+            .net_share_purchase_activity
+            .expect("netSharePurchaseActivity module");
+        assert!(activity.period.is_some());
+    }
+
+    #[test]
+    fn test_module_sec_filings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "AAPL");
+        let filings = s.sec_filings.expect("secFilings module");
+        assert!(!filings.filings.is_empty());
+        assert!(filings.filings[0].filing_type.is_some());
+    }
+
+    #[test]
+    fn test_module_fund_profile() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "VOO");
+        let profile = s.fund_profile.expect("fundProfile module");
+        assert!(profile.family.is_some());
+        assert!(profile.fees_expenses_investment.is_some());
+    }
+
+    #[test]
+    fn test_module_top_holdings() {
+        let mut provider = YahooConnector::new().unwrap();
+        let s = fetch_summary(&mut provider, "VOO");
+        let holdings = s.top_holdings.expect("topHoldings module");
+        assert!(!holdings.holdings.is_empty());
+        assert!(holdings.holdings[0].symbol.is_some());
+        assert!(!holdings.sector_weightings.is_empty());
+    }
+
     #[test]
     fn test_get_crumb() {
         let mut provider = YahooConnector::new().unwrap();
