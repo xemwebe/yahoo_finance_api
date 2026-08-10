@@ -147,6 +147,7 @@ pub struct YOptionChainData {
     pub options: Vec<YOptionDetails>,
 }
 
+/// Current market quote data for the underlying symbol.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuote {
