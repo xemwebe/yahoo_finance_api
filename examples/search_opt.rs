@@ -31,7 +31,10 @@ fn offline_demo() {
 
     // YSearchResult::from_opt replaces the missing fields with defaults
     let filled = yahoo::YSearchResult::from_opt(&opt);
-    let hit = filled.quotes.first().unwrap();
+    let Some(hit) = filled.quotes.first() else {
+        println!("no search hits in canned response");
+        return;
+    };
     println!(
         "from_opt: short_name={:?} long_name={:?}",
         hit.short_name, hit.long_name

@@ -5,7 +5,7 @@
 + devcontainer added
 + Route all Yahoo API requests through proxy pool
 + Fix: get_crumb, get_ticker_info, get_financial_events now use proxy
-+ Fix: cookie header sends only name=value, not raw Set-Cookie attributeg
++ Fix: cookie header sends only name=value, not raw Set-Cookie attribute
 + Fix: stale crumb in URL after Invalid Crumb refresh
 + Add https_only(true) for security
 + new method: `get_ticker_info(symbol)` returns all 20 quoteSummary modules (assetProfile,

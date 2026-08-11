@@ -475,7 +475,7 @@ pub struct YFinance {
     pub error: Option<YErrorMessage>,
 }
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct YErrorMessage {
     pub code: Option<String>,
     pub description: Option<String>,
@@ -1271,18 +1271,22 @@ pub struct YEarningsResponse {
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsFinance {
+    #[serde(default)]
     pub result: Vec<YEarningsResult>,
     pub error: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsResult {
+    #[serde(default)]
     pub documents: Vec<YEarningsDocument>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsDocument {
+    #[serde(default)]
     pub columns: Vec<YEarningsColumn>,
+    #[serde(default)]
     pub rows: Vec<Vec<serde_json::Value>>,
 }
 
