@@ -1149,14 +1149,18 @@ pub struct NetSharePurchaseActivity {
     pub period: Option<String>,
     pub buy_info_count: Option<i64>,
     pub buy_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub buy_percent_insider_shares: Option<f64>,
     pub sell_info_count: Option<i64>,
     pub sell_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub sell_percent_insider_shares: Option<f64>,
     pub net_info_count: Option<i64>,
     pub net_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub net_percent_insider_shares: Option<f64>,
     pub net_inst_shares_buying: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub net_inst_buying_percent: Option<f64>,
     pub total_insider_shares: Option<i64>,
 }
@@ -1988,6 +1992,23 @@ mod tests {
         assert_eq!(nsp.buy_info_count, Some(11));
         assert_eq!(nsp.net_info_shares, Some(36645));
         assert_eq!(nsp.buy_percent_insider_shares, Some(0.002));
+
+        // Yahoo reports percent fields as the string "Infinity" when the
+        // denominator (totalInsiderShares) is zero
+        let json = r#"
+        {
+            "buyPercentInsiderShares": "Infinity",
+            "sellPercentInsiderShares": "-Infinity",
+            "netPercentInsiderShares": "Infinity",
+            "netInstBuyingPercent": "NaN",
+            "totalInsiderShares": 0
+        }
+        "#;
+        let nsp: NetSharePurchaseActivity = serde_json::from_str(json).unwrap();
+        assert_eq!(nsp.buy_percent_insider_shares, Some(f64::INFINITY));
+        assert_eq!(nsp.sell_percent_insider_shares, Some(f64::NEG_INFINITY));
+        assert_eq!(nsp.net_percent_insider_shares, Some(f64::INFINITY));
+        assert!(nsp.net_inst_buying_percent.unwrap().is_nan());
     }
 
     #[test]
