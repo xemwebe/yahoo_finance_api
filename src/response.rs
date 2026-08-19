@@ -56,6 +56,13 @@ pub(crate) fn decode_body(
     if status == StatusCode::UNAUTHORIZED {
         return Err(YahooError::Unauthorized);
     }
+    if status == StatusCode::FORBIDDEN {
+        // Yahoo surfaces a stale crumb/cookie as a 403 (same as 401). Mapping
+        // it to Unauthorized lets the retry guard in get_ticker_info refresh
+        // the crumb/cookie and retry, matching get_financial_events and
+        // get_crumb which already treat 403 as an expired session.
+        return Err(YahooError::Unauthorized);
+    }
     if status == StatusCode::NOT_FOUND {
         return Err(YahooError::FetchFailed(format!(
             "404, request url: {}",
@@ -63,6 +70,13 @@ pub(crate) fn decode_body(
         )));
     }
     if !status.is_success() {
+        if status.is_server_error() {
+            return Err(YahooError::ServerError(format!(
+                "{} status, request url: {}",
+                status.as_u16(),
+                url
+            )));
+        }
         let body = text.trim();
         if !body.is_empty() && body.starts_with('{') {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
@@ -85,12 +99,26 @@ pub(crate) fn decode_body(
     if body.starts_with('<') {
         return Err(YahooError::HtmlResponse);
     }
+    // Yahoo serves a short maintenance page when the API is temporarily down.
+    // yfinance detects this exact phrase (history.py "Will be right back").
+    if body.len() <= 4_000 && body.contains("Will be right back") {
+        return Err(YahooError::HtmlResponse);
+    }
     if body.len() <= 4_000 && body.to_ascii_lowercase().contains("too many requests") {
         return Err(YahooError::TooManyRequests(url.to_string()));
     }
 
     match serde_json::from_str::<serde_json::Value>(body) {
         Ok(json) => {
+            // yfinance treats a `{"status_code": ...}` body (200) as a
+            // Yahoo-side error rather than a deserialization problem
+            // (history.py: "Yahoo status_code = ...").
+            if json.get("status_code").is_some() {
+                return Err(YahooError::FetchFailed(format!(
+                    "Yahoo returned status_code in body, request url: {}",
+                    url
+                )));
+            }
             if let Some((code, description)) = top_error_code(&json) {
                 return Err(error_from_code(&code, description.as_deref(), url));
             }
@@ -154,6 +182,16 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_maintenance_page() {
+        // yfinance detects the exact maintenance phrase "Will be right back".
+        let body = "Will be right back\n\nThanks for your patience.";
+        match parse(body, StatusCode::OK) {
+            Err(YahooError::HtmlResponse) => {}
+            other => panic!("expected HtmlResponse, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_decode_rate_limited() {
         match parse("Too Many Requests", StatusCode::OK) {
             Err(YahooError::TooManyRequests(_)) => {}
@@ -176,12 +214,18 @@ mod tests {
     #[test]
     fn test_decode_server_error_status() {
         match parse("", StatusCode::INTERNAL_SERVER_ERROR) {
-            Err(YahooError::FetchFailed(e)) if e.contains("500 status") => {}
-            other => panic!("expected FetchFailed 500, got {:?}", other),
+            Err(YahooError::ServerError(e)) if e.contains("500 status") => {}
+            other => panic!("expected ServerError 500, got {:?}", other),
         }
         match parse("", StatusCode::UNAUTHORIZED) {
             Err(YahooError::Unauthorized) => {}
             other => panic!("expected Unauthorized, got {:?}", other),
+        }
+        // 403 = stale crumb/cookie, mapped to Unauthorized so the retry guard
+        // can refresh the session (same as get_financial_events/get_crumb).
+        match parse("", StatusCode::FORBIDDEN) {
+            Err(YahooError::Unauthorized) => {}
+            other => panic!("expected Unauthorized for 403, got {:?}", other),
         }
     }
 

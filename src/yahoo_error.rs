@@ -8,6 +8,9 @@ pub enum YahooError {
     /// The request itself or its setup failed (e.g. empty ticker).
     #[error("fetching the data from yahoo! finance failed: {0}")]
     FetchFailed(String),
+    /// The request itself or its setup failed (e.g. empty ticker).
+    #[error("yahoo! finance returned a server error (5xx): {0}")]
+    ServerError(String),
     /// The response could not be deserialized into the expected type.
     #[error("deserializing response from yahoo! finance failed: {0}")]
     DeserializeFailed(#[from] serde_json::Error),

@@ -28,7 +28,11 @@ pub struct YResponse {
 
 impl YResponse {
     pub(crate) fn map_error_msg(self) -> Result<YResponse, YahooError> {
-        if self.chart.result.is_none() {
+        let empty = match &self.chart.result {
+            None => true,
+            Some(r) => r.is_empty(),
+        };
+        if empty {
             if let Some(y_error) = self.chart.error {
                 return Err(YahooError::ApiError(y_error));
             }
@@ -40,6 +44,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
 
         for stock in result {
             let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
@@ -48,6 +55,9 @@ impl YResponse {
                 return Err(YahooError::NoQuotes);
             }
 
+            if stock.indicators.quote.is_empty() {
+                return Err(YahooError::DataInconsistency);
+            }
             let quote = &stock.indicators.quote[0];
 
             if quote.open.is_none()
@@ -67,6 +77,17 @@ impl YResponse {
 
             if open_len != n || high_len != n || low_len != n || volume_len != n || close_len != n {
                 return Err(YahooError::DataInconsistency);
+            }
+
+            if let Some(adjclose) = &stock.indicators.adjclose {
+                if adjclose.is_empty() {
+                    return Err(YahooError::DataInconsistency);
+                }
+                if let Some(series) = &adjclose[0].adjclose {
+                    if series.len() != n {
+                        return Err(YahooError::DataInconsistency);
+                    }
+                }
             }
         }
         Ok(result)
@@ -118,6 +139,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
         Ok(stock.meta.to_owned())
     }
@@ -128,6 +152,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -148,6 +175,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -166,6 +196,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -216,7 +249,7 @@ pub struct YMetaData {
     pub exchange_name: String,
     pub full_exchange_name: String,
     #[serde(default)]
-    pub first_trade_date: Option<i32>,
+    pub first_trade_date: Option<i64>,
     pub regular_market_time: Option<u32>,
     pub gmtoffset: i32,
     pub timezone: String,
@@ -241,7 +274,7 @@ pub struct YMetaData {
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_current_trading_period")]
     pub current_trading_period: CurrentTradingPeriod,
     #[serde(default)]
     pub trading_periods: TradingPeriods,
@@ -249,6 +282,17 @@ pub struct YMetaData {
     pub range: String,
     #[serde(default)]
     pub valid_ranges: Vec<String>,
+}
+
+/// Deserialize `currentTradingPeriod`, tolerating an explicit `null` (which
+/// Yahoo returns for some asset classes) by falling back to the default value.
+fn deserialize_current_trading_period<'de, D>(
+    deserializer: D,
+) -> Result<CurrentTradingPeriod, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<CurrentTradingPeriod>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -280,13 +324,20 @@ impl<'de> Deserialize<'de> for TradingPeriods {
                 formatter.write_str("struct (or array) TradingPeriods")
             }
 
+            fn visit_unit<E>(self) -> Result<TradingPeriods, E>
+            where
+                E: de::Error,
+            {
+                Ok(TradingPeriods::default())
+            }
+
             fn visit_seq<V>(self, mut seq: V) -> Result<TradingPeriods, V::Error>
             where
                 V: SeqAccess<'de>,
             {
                 let mut regular: Vec<PeriodInfo> = Vec::new();
 
-                while let Ok(Some(mut e)) = seq.next_element::<Vec<PeriodInfo>>() {
+                while let Some(mut e) = seq.next_element::<Vec<PeriodInfo>>()? {
                     regular.append(&mut e);
                 }
 
@@ -418,6 +469,7 @@ pub struct AdjClose {
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct QuoteList {
+    #[serde(default)]
     pub volume: Option<Vec<Option<u64>>>,
     #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub high: Option<Vec<Option<Decimal>>>,
@@ -584,6 +636,25 @@ impl YQuoteSummary {
     pub fn from_json(json: serde_json::Value) -> Result<YQuoteSummary, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
+
+    /// True if the response carries at least one result block (v8 `finance`
+    /// or v10 `quoteSummary`), i.e. the API actually returned data.
+    pub(crate) fn has_result(&self) -> bool {
+        let v10 = self
+            .quote_summary
+            .as_ref()
+            .and_then(|q| q.result.as_ref())
+            .is_some_and(|r| !r.is_empty());
+        let v8 = self
+            .finance
+            .as_ref()
+            .and_then(|f| f.result.as_ref())
+            .is_some_and(|r| {
+                r.as_object().is_some_and(|o| !o.is_empty())
+                    || r.as_array().is_some_and(|a| !a.is_empty())
+            });
+        v10 || v8
+    }
 }
 
 /// `quoteSummary` module: all 20 modules of the quoteSummary API (company
@@ -629,7 +700,7 @@ pub struct AssetProfile {
     pub sector: Option<String>,
     pub long_business_summary: Option<String>,
     pub full_time_employees: Option<u32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub company_officers: Vec<CompanyOfficer>,
     pub audit_risk: Option<u16>,
     pub board_risk: Option<u16>,
@@ -645,9 +716,9 @@ pub struct AssetProfile {
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanyOfficer {
-    pub name: String,
+    pub name: Option<String>,
     pub age: Option<u32>,
-    pub title: String,
+    pub title: Option<String>,
     pub year_born: Option<u32>,
     pub fiscal_year: Option<u32>,
     pub total_pay: Option<ValueWrapper>,
@@ -686,26 +757,52 @@ where
     }
 }
 
+/// Deserialize a sequence field tolerating an explicit `null` (which Yahoo
+/// sends for some asset classes) by falling back to an empty vector.
+/// `#[serde(default)]` alone only covers a *missing* field, not `null`.
+fn deserialize_nullable_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let opt = Option::<Vec<T>>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SummaryDetail {
     pub max_age: Option<i64>,
     pub price_hint: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub previous_close: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub open: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub day_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub day_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_previous_close: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_open: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_day_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_day_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub dividend_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub dividend_yield: Option<f64>,
     pub ex_dividend_date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub payout_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub five_year_avg_dividend_yield: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub beta: Option<f64>,
-    /// The trailing_pe field may contain the string "Infinity" instead of f64, in which case we return f64::MAX
+    /// The trailing_pe field may contain the string "Infinity" instead of f64,
+    /// in which case we return f64::INFINITY (same for "-Infinity" and "NaN")
     #[serde(
         default,
         deserialize_with = "deserialize_f64_special",
@@ -725,14 +822,22 @@ pub struct SummaryDetail {
     pub average_volume_10days: Option<u64>,
     #[serde(rename = "averageDailyVolume10Day")]
     pub average_daily_volume_10day: Option<u64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub bid: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub ask: Option<f64>,
     pub bid_size: Option<i64>,
     pub ask_size: Option<i64>,
     pub market_cap: Option<u64>,
-    #[serde(rename = "yield")]
+    #[serde(
+        rename = "yield",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub yield_: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_two_week_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_two_week_high: Option<f64>,
     #[serde(
         default,
@@ -740,8 +845,11 @@ pub struct SummaryDetail {
         deserialize_with = "deserialize_f64_special"
     )]
     pub price_to_sales_trailing12months: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_day_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub two_hundred_day_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_annual_dividend_rate: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_annual_dividend_yield: Option<f64>,
@@ -753,7 +861,9 @@ pub struct SummaryDetail {
     pub algorithm: Option<String>,
     pub tradeable: Option<bool>,
     pub expire_date: Option<u32>,
-    pub strike_price: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub strike_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub open_interest: Option<Decimal>,
 }
 
@@ -769,6 +879,7 @@ pub struct DefaultKeyStatistics {
         deserialize_with = "deserialize_f64_special"
     )]
     pub forward_pe: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margins: Option<f64>,
     pub float_shares: Option<u64>,
     pub shares_outstanding: Option<u64>,
@@ -776,15 +887,23 @@ pub struct DefaultKeyStatistics {
     pub shares_short_prior_month: Option<u64>,
     pub shares_short_previous_month_date: Option<u64>,
     pub date_short_interest: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub shares_percent_shares_out: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub held_percent_insiders: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub held_percent_institutions: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub short_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub short_percent_of_float: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub beta: Option<f64>,
     pub implied_shares_outstanding: Option<u64>,
     pub category: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub book_value: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_book: Option<f64>,
     pub fund_family: Option<String>,
     pub fund_inception_date: Option<u32>,
@@ -792,23 +911,38 @@ pub struct DefaultKeyStatistics {
     pub last_fiscal_year_end: Option<i64>,
     pub next_fiscal_year_end: Option<i64>,
     pub most_recent_quarter: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_quarterly_growth: Option<f64>,
     pub net_income_to_common: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_eps: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub forward_eps: Option<f64>,
     pub last_split_factor: Option<String>,
     pub last_split_date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub enterprise_to_revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub enterprise_to_ebitda: Option<f64>,
-    #[serde(rename = "52WeekChange")]
+    #[serde(
+        rename = "52WeekChange",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub fifty_two_week_change: Option<f64>,
-    #[serde(rename = "SandP52WeekChange")]
+    #[serde(
+        rename = "SandP52WeekChange",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub sand_p_fifty_two_week_change: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub last_dividend_value: Option<f64>,
     pub last_dividend_date: Option<i64>,
     pub latest_share_class: Option<String>,
     pub lead_investor: Option<String>,
     #[serde(rename = "yield")]
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub _yield: Option<f64>,
 }
 
@@ -836,36 +970,55 @@ pub struct QuoteType {
 #[serde(rename_all = "camelCase")]
 pub struct FinancialData {
     pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_high_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_low_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_mean_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_median_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub recommendation_mean: Option<f64>,
     pub recommendation_key: Option<String>,
     pub number_of_analyst_opinions: Option<u64>,
     /// Cash can be negative on the balance sheet, hence `i64` (Yahoo returns
     /// negative integers for some tickers, e.g. GLABF: -613).
     pub total_cash: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub total_cash_per_share: Option<f64>,
     pub ebitda: Option<i64>,
     /// Debt can be negative on the balance sheet, hence `i64`.
     pub total_debt: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub quick_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_ratio: Option<f64>,
     pub total_revenue: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub debt_to_equity: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_per_share: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub return_on_assets: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub return_on_equity: Option<f64>,
     pub gross_profits: Option<i64>,
     pub free_cashflow: Option<i64>,
     pub operating_cashflow: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub gross_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub ebitda_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub operating_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margins: Option<f64>,
     pub financial_currency: Option<String>,
 }
@@ -874,6 +1027,9 @@ pub struct FinancialData {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RawValue {
+    /// `raw` may arrive as `"Infinity"`/`"NaN"` strings or `null`; tolerate
+    /// them instead of failing the whole quoteSummary response.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub raw: Option<f64>,
     pub fmt: Option<String>,
     pub long_fmt: Option<String>,
@@ -884,7 +1040,7 @@ pub struct RawValue {
 #[serde(rename_all = "camelCase")]
 pub struct RecommendationTrend {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub trend: Vec<RecommendationTrendItem>,
 }
 
@@ -904,7 +1060,7 @@ pub struct RecommendationTrendItem {
 #[serde(rename_all = "camelCase")]
 pub struct EarningsTrend {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub trend: Vec<EarningsTrendItem>,
 }
 
@@ -992,7 +1148,7 @@ pub struct GrowthEstimate {
 pub struct EarningsHistory {
     pub max_age: Option<i64>,
     pub default_methodology: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub history: Vec<EarningsHistoryItem>,
 }
 
@@ -1022,8 +1178,9 @@ pub struct Earnings {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EarningsChart {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub quarterly: Vec<EarningsChartQuarterly>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_quarter_estimate: Option<f64>,
     pub current_quarter_estimate_date: Option<String>,
     pub current_calendar_quarter: Option<String>,
@@ -1039,7 +1196,9 @@ pub struct EarningsChart {
 #[serde(rename_all = "camelCase")]
 pub struct EarningsChartQuarterly {
     pub date: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub actual: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub estimate: Option<f64>,
     pub fiscal_quarter: Option<String>,
     pub calendar_quarter: Option<String>,
@@ -1054,9 +1213,9 @@ pub struct EarningsChartQuarterly {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FinancialsChart {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub yearly: Vec<FinancialsChartYearly>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub quarterly: Vec<FinancialsChartQuarterly>,
 }
 
@@ -1066,8 +1225,11 @@ pub struct FinancialsChartYearly {
     /// Year as an integer (e.g. 2022), unlike the quarterly chart where the
     /// date is a string such as "2Q2025".
     pub date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margin: Option<f64>,
 }
 
@@ -1076,8 +1238,11 @@ pub struct FinancialsChartYearly {
 pub struct FinancialsChartQuarterly {
     pub date: Option<String>,
     pub fiscal_quarter: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margin: Option<f64>,
 }
 
@@ -1086,7 +1251,7 @@ pub struct FinancialsChartQuarterly {
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeDowngradeHistory {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub history: Vec<UpgradeDowngradeItem>,
 }
 
@@ -1100,7 +1265,9 @@ pub struct UpgradeDowngradeItem {
     pub from_grade: Option<String>,
     pub action: Option<String>,
     pub price_target_action: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_price_target: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub prior_price_target: Option<f64>,
 }
 
@@ -1124,11 +1291,17 @@ pub struct CalendarEarnings {
     /// Unix timestamps of the upcoming earnings call dates.
     pub earnings_call_date: Option<Vec<i64>>,
     pub is_earnings_date_estimate: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_high: Option<f64>,
 }
 
@@ -1137,7 +1310,7 @@ pub struct CalendarEarnings {
 #[serde(rename_all = "camelCase")]
 pub struct InsiderHolders {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub holders: Vec<InsiderHolder>,
 }
 
@@ -1163,7 +1336,7 @@ pub struct InsiderHolder {
 #[serde(rename_all = "camelCase")]
 pub struct InsiderTransactions {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub transactions: Vec<InsiderTransaction>,
 }
 
@@ -1187,8 +1360,11 @@ pub struct InsiderTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct MajorHoldersBreakdown {
     pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub insiders_percent_held: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub institutions_percent_held: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub institutions_float_percent_held: Option<f64>,
     pub institutions_count: Option<i64>,
 }
@@ -1198,7 +1374,7 @@ pub struct MajorHoldersBreakdown {
 #[serde(rename_all = "camelCase")]
 pub struct InstitutionOwnership {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub ownership_list: Vec<InstitutionOwnershipItem>,
 }
 
@@ -1219,7 +1395,7 @@ pub struct InstitutionOwnershipItem {
 #[serde(rename_all = "camelCase")]
 pub struct FundOwnership {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub ownership_list: Vec<FundOwnershipItem>,
 }
 
@@ -1284,8 +1460,11 @@ pub struct FundManagementInfo {
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FundFeesExpenses {
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub annual_report_expense_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub annual_holdings_turnover: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub total_net_assets: Option<f64>,
     pub projection_values: Option<RawValue>,
 }
@@ -1295,22 +1474,28 @@ pub struct FundFeesExpenses {
 #[serde(rename_all = "camelCase")]
 pub struct TopHoldings {
     pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub cash_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub stock_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub bond_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub other_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub preferred_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub convertible_position: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub holdings: Vec<TopHolding>,
     pub equity_holdings: Option<FundValuation>,
     pub bond_holdings: Option<FundValuation>,
     /// Bond rating weights keyed by rating name (e.g. "us_government"); empty
     /// for equity funds.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub bond_ratings: Vec<HashMap<String, f64>>,
     /// Sector weights keyed by sector name (e.g. "technology", "realestate").
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub sector_weightings: Vec<HashMap<String, f64>>,
 }
 
@@ -1319,15 +1504,20 @@ pub struct TopHoldings {
 pub struct TopHolding {
     pub symbol: Option<String>,
     pub holding_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub holding_percent: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FundValuation {
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_book: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_sales: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_cashflow: Option<f64>,
 }
 
@@ -1336,7 +1526,7 @@ pub struct FundValuation {
 #[serde(rename_all = "camelCase")]
 pub struct SecFilings {
     pub max_age: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub filings: Vec<SecFiling>,
 }
 
@@ -1610,6 +1800,101 @@ mod tests {
         }"#;
         let stats: DefaultKeyStatistics = serde_json::from_str(stats_json).unwrap();
         assert_eq!(stats._yield, Some(1.23));
+    }
+
+    #[test]
+    fn test_summary_detail_tolerates_infinity() {
+        // Yahoo occasionally returns "Infinity"/"NaN" strings in price fields.
+        let json = r#"{
+            "previousClose": "Infinity",
+            "open": "NaN",
+            "beta": "-Infinity",
+            "bid": 12.5
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.previous_close, Some(f64::INFINITY));
+        assert!(sd.open.unwrap().is_nan());
+        assert_eq!(sd.beta, Some(f64::NEG_INFINITY));
+        assert_eq!(sd.bid, Some(12.5));
+    }
+
+    #[test]
+    fn test_financial_data_tolerates_infinity() {
+        let json = r#"{
+            "profitMargins": "Infinity",
+            "currentPrice": "NaN",
+            "targetHighPrice": 220.0
+        }"#;
+        let fd: FinancialData = serde_json::from_str(json).unwrap();
+        assert_eq!(fd.profit_margins, Some(f64::INFINITY));
+        assert!(fd.current_price.unwrap().is_nan());
+        assert_eq!(fd.target_high_price, Some(220.0));
+    }
+
+    #[test]
+    fn test_raw_value_tolerates_infinity_and_null() {
+        // `RawValue.raw` backs dozens of fields (pctHeld, position, value, ...);
+        // a single "Infinity" string must not fail the whole quoteSummary.
+        let json = r#"{
+            "raw": "Infinity",
+            "fmt": "Inf"
+        }"#;
+        let rv: RawValue = serde_json::from_str(json).unwrap();
+        assert_eq!(rv.raw, Some(f64::INFINITY));
+        assert_eq!(rv.fmt.as_deref(), Some("Inf"));
+
+        let json = r#"{
+            "raw": null
+        }"#;
+        let rv: RawValue = serde_json::from_str(json).unwrap();
+        assert_eq!(rv.raw, None);
+    }
+
+    #[test]
+    fn test_company_officer_null_name_title() {
+        // Yahoo may return `null` for an officer's name/title; tolerate it.
+        let json = r#"{
+            "name": null,
+            "title": null,
+            "age": 55
+        }"#;
+        let officer: CompanyOfficer = serde_json::from_str(json).unwrap();
+        assert!(officer.name.is_none());
+        assert!(officer.title.is_none());
+        assert_eq!(officer.age, Some(55));
+    }
+
+    #[test]
+    fn test_quote_list_missing_volume() {
+        // Exotic instruments (indices/futures) may omit the volume key entirely.
+        let json = r#"{
+            "open": [1.0],
+            "high": [2.0],
+            "low": [0.5],
+            "close": [1.5]
+        }"#;
+        let ql: QuoteList = serde_json::from_str(json).unwrap();
+        assert!(ql.volume.is_none());
+        assert_eq!(ql.open.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_top_holdings_and_valuation_tolerate_infinity() {
+        let json = r#"{
+            "cashPosition": "Infinity",
+            "stockPosition": 50.0
+        }"#;
+        let th: TopHoldings = serde_json::from_str(json).unwrap();
+        assert_eq!(th.cash_position, Some(f64::INFINITY));
+        assert_eq!(th.stock_position, Some(50.0));
+
+        let json = r#"{
+            "priceToEarnings": "Infinity",
+            "priceToBook": 4.2
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(f64::INFINITY));
+        assert_eq!(fv.price_to_book, Some(4.2));
     }
 
     #[test]
@@ -2863,5 +3148,59 @@ mod tests {
             th.sector_weightings[10].get("healthcare"),
             Some(&0.088999994)
         );
+    }
+
+    // Regression tests for the panic guards (empty result/quote/adjclose) and
+    // the null-tolerant trading periods
+
+    #[test]
+    fn test_empty_chart_result_is_noresult_not_panic() {
+        let response: YResponse =
+            serde_json::from_str(r#"{"chart":{"result":[],"error":null}}"#).unwrap();
+        assert!(matches!(response.last_quote(), Err(YahooError::NoResult)));
+        assert!(matches!(response.quotes(), Err(YahooError::NoResult)));
+        assert!(matches!(response.metadata(), Err(YahooError::NoResult)));
+        assert!(matches!(response.splits(), Err(YahooError::NoResult)));
+        assert!(matches!(response.dividends(), Err(YahooError::NoResult)));
+        assert!(matches!(
+            response.capital_gains(),
+            Err(YahooError::NoResult)
+        ));
+    }
+
+    #[test]
+    fn test_empty_quote_list_is_datainconsistency_not_panic() {
+        let response: YResponse = serde_json::from_str(
+            r#"{"chart":{"result":[{"meta":{"symbol":"TEST","instrumentType":"EQUITY","exchangeName":"NMS","fullExchangeName":"Nasdaq","gmtoffset":-14400,"timezone":"EDT","exchangeTimezoneName":"America/New_York","hasPrePostMarketData":true,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo"},"timestamp":[1,2],"indicators":{"quote":[]}}],"error":null}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            response.last_quote(),
+            Err(YahooError::DataInconsistency)
+        ));
+    }
+
+    #[test]
+    fn test_short_adjclose_series_is_datainconsistency_not_panic() {
+        let response: YResponse = serde_json::from_str(
+            r#"{"chart":{"result":[{"meta":{"symbol":"TEST","instrumentType":"EQUITY","exchangeName":"NMS","fullExchangeName":"Nasdaq","gmtoffset":-14400,"timezone":"EDT","exchangeTimezoneName":"America/New_York","hasPrePostMarketData":true,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo"},"timestamp":[1,2],"indicators":{"quote":[{"open":[1.0,2.0],"high":[1.0,2.0],"low":[1.0,2.0],"close":[1.0,2.0],"volume":[1,2]}],"adjclose":[{"adjclose":[1.0]}]}}],"error":null}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            response.quotes(),
+            Err(YahooError::DataInconsistency)
+        ));
+    }
+
+    #[test]
+    fn test_null_trading_periods_fall_back_to_default() {
+        let meta: YMetaData = serde_json::from_str(
+            r#"{"currency":"USD","symbol":"BTC-USD","exchangeName":"CCC","fullExchangeName":"Crypto Coin Market","instrumentType":"CRYPTOCURRENCY","firstTradeDate":1419031800,"regularMarketTime":1724000000,"hasPrePostMarketData":false,"gmtoffset":0,"timezone":"UTC","exchangeTimezoneName":"UTC","regularMarketPrice":60000.0,"fiftyTwoWeekHigh":70000.0,"fiftyTwoWeekLow":15000.0,"regularMarketDayHigh":61000.0,"regularMarketDayLow":59000.0,"regularMarketVolume":1000,"longName":"Bitcoin USD","shortName":"BTC-USD","chartPreviousClose":59000.0,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo","validRanges":["1d","5d","1mo"]}"#,
+        )
+        .unwrap();
+        assert_eq!(meta.current_trading_period.pre, PeriodInfo::default());
+        assert_eq!(meta.current_trading_period.regular, PeriodInfo::default());
+        assert_eq!(meta.current_trading_period.post, PeriodInfo::default());
+        assert_eq!(meta.trading_periods, TradingPeriods::default());
     }
 }
