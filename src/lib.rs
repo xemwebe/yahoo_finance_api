@@ -16,8 +16,8 @@
 //! - `governor`: rate-limit requests to avoid HTTP 429 responses. Defaults to
 //!   10 requests/second; configure via `YahooConnectorBuilder::rate_limit`.
 //! - `decimal`: represent prices as `rust_decimal::Decimal` instead of `f64`.
-//! - `debug`: include the full response body in deserialization error
-//!   messages (only when the error contains "expected value").
+//! - `debug`: include the full response body (truncated) in deserialization
+//!   error messages.
 //!
 #![cfg_attr(
     not(feature = "blocking"),
@@ -224,10 +224,26 @@ const YSEARCH_URL: &str = "https://query2.finance.yahoo.com/v1/finance/search";
 const Y_GET_COOKIE_URL: &str = "https://fc.yahoo.com";
 const Y_GET_CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb";
 const Y_EARNINGS_URL: &str = "https://query1.finance.yahoo.com/v1/finance/visualization";
+const YQUOTE_SUMMARY_URL: &str = "https://query2.finance.yahoo.com/v10/finance/quoteSummary";
 
 // special yahoo hardcoded keys and headers
 const Y_COOKIE_REQUEST_HEADER: &str = "set-cookie";
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+/// Percent-encode a ticker/name component so symbols with spaces or special
+/// characters (`&`, `#`, `+`, ...) do not break the request URL.
+pub(crate) fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
 
 // Macros instead of constants,
 macro_rules! YCHART_PERIOD_QUERY {
@@ -247,7 +263,7 @@ macro_rules! YCHART_RANGE_QUERY {
 }
 macro_rules! YCHART_PERIOD_INTERVAL_QUERY {
     () => {
-        "{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}"
+        "{url}/{symbol}?symbol={symbol}&range={range}&interval={interval}&includePrePost={prepost}&events=div|split|capitalGains"
     };
 }
 macro_rules! YTICKER_QUERY {
@@ -257,8 +273,8 @@ macro_rules! YTICKER_QUERY {
 }
 macro_rules! YQUOTE_SUMMARY_QUERY {
     () => {
-        "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail,recommendationTrend,earningsTrend,earningsHistory,earnings,upgradeDowngradeHistory,calendarEvents,insiderHolders,insiderTransactions,majorHoldersBreakdown,institutionOwnership,fundOwnership,netSharePurchaseActivity,fundProfile,topHoldings,secFilings&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
-    }
+        "{url}/{symbol}?modules=financialData,quoteType,defaultKeyStatistics,assetProfile,summaryDetail,recommendationTrend,earningsTrend,earningsHistory,earnings,upgradeDowngradeHistory,calendarEvents,insiderHolders,insiderTransactions,majorHoldersBreakdown,institutionOwnership,fundOwnership,netSharePurchaseActivity,fundProfile,topHoldings,secFilings&corsDomain=finance.yahoo.com&formatted=false&symbol={symbol}&crumb={crumb}"
+    };
 }
 macro_rules! YEARNINGS_QUERY {
     () => {
@@ -269,10 +285,14 @@ macro_rules! YEARNINGS_QUERY {
 /// Container for connection parameters to yahoo! finance server
 pub struct YahooConnector {
     client: Client,
-    url: &'static str,
+    url: String,
     search_url: &'static str,
     cookie: Option<String>,
     crumb: Option<String>,
+    summary_url: String,
+    earnings_url: String,
+    cookie_url: String,
+    crumb_url: String,
     #[cfg(feature = "governor")]
     rate_limiter: Option<Arc<YRateLimiter>>,
 }
@@ -313,8 +333,12 @@ impl YahooConnector {
     fn default_internal() -> Self {
         YahooConnector {
             client: Client::default(),
-            url: YCHART_URL,
+            url: YCHART_URL.to_string(),
             search_url: YSEARCH_URL,
+            summary_url: YQUOTE_SUMMARY_URL.to_string(),
+            earnings_url: Y_EARNINGS_URL.to_string(),
+            cookie_url: Y_GET_COOKIE_URL.to_string(),
+            crumb_url: Y_GET_CRUMB_URL.to_string(),
             cookie: None,
             crumb: None,
             #[cfg(feature = "governor")]
@@ -411,3 +435,6 @@ pub mod async_impl;
 
 #[cfg(feature = "blocking")]
 pub mod blocking_impl;
+
+#[cfg(test)]
+pub(crate) mod mock_server;
