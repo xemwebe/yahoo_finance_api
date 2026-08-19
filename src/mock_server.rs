@@ -122,11 +122,12 @@ fn handle_connection(
         .lock()
         .unwrap()
         .push(request_line.trim().to_string());
-    let (status, headers, body) = responses.lock().unwrap().pop_front().unwrap_or((
-        404,
-        Vec::new(),
-        "not found".to_string(),
-    ));
+    let (status, headers, body) =
+        responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or((404, Vec::new(), "not found".to_string()));
     let reason = match status {
         200 => "OK",
         401 => "Unauthorized",

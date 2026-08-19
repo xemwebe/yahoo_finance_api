@@ -216,6 +216,15 @@ async fn main() {
 }
 ```
 
+> **⚠️ Warning:** `get_financial_events`/`get_earnings_only` query Yahoo's
+> `v1/finance/visualization` endpoint, which Yahoo is no longer updating
+> (as of mid-2025). Live checks show it returns historical earnings dates but
+> stops at the last quarter Yahoo processed — e.g. AAPL returned nothing newer
+> than 2025-05-01 when last verified. Treat the returned list as historical
+> data, not as a reliable source for upcoming earnings dates. (yfinance
+> migrated to HTML-scraping `finance.yahoo.com/calendar/earnings` for the same
+> reason.)
+
 ### Search
 
 ```rust
