@@ -1,13 +1,4 @@
-## Release 4.2.0
-+ Added an optional rate-limiting `governor` feature to gracefully handle request throttling and prevent HTTP 429 rate limits.
-+ Support for custom rate limits via `YahooConnectorBuilder::rate_limit()`.
-+ extend quotes by field `yield_` (representing Yahoo's yield field)
-+ devcontainer added
-+ Route all Yahoo API requests through proxy pool
-+ Fix: get_crumb, get_ticker_info, get_financial_events now use proxy
-+ Fix: cookie header sends only name=value, not raw Set-Cookie attribute
-+ Fix: stale crumb in URL after Invalid Crumb refresh
-+ Add https_only(true) for security
+## Release 4.3.0
 + new method: `get_ticker_info(symbol)` returns all 20 quoteSummary modules (assetProfile,
   summaryDetail, defaultKeyStatistics, quoteType, financialData, recommendationTrend,
   earningsTrend, earningsHistory, earnings, upgradeDowngradeHistory, calendarEvents,
@@ -18,6 +9,17 @@
 + error handling: quoteSummary API errors (v10) trigger the crumb/Unauthorized retry;
   invalid URLs are reported as `YahooError::InvalidUrl` instead of panicking
 + expand the examples suite (16 examples: ticker_info, quote_range, errors, search_opt, ...)
+
+## Release 4.2.0
++ Added an optional rate-limiting `governor` feature to gracefully handle request throttling and prevent HTTP 429 rate limits.
++ Support for custom rate limits via `YahooConnectorBuilder::rate_limit()`.
++ extend quotes by field `yield_` (representing Yahoo's yield field)
++ devcontainer added
++ Route all Yahoo API requests through proxy pool
++ Fix: get_crumb, get_ticker_info, get_financial_events now use proxy
++ Fix: cookie header sends only name=value, not raw Set-Cookie attribute
++ Fix: stale crumb in URL after Invalid Crumb refresh
++ Add https_only(true) for security
 
 ## Release 4.1.1
 + security update for dependencies

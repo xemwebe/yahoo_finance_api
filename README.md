@@ -35,7 +35,7 @@ With the `blocking` feature enabled, all of the above methods are available on t
 
 ```toml
 [dependencies]
-yahoo_finance_api = "4.2"
+yahoo_finance_api = "4.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 time = { version = "0.3", features = ["macros"] }
 reqwest = "0.13"
@@ -241,7 +241,7 @@ To prevent overwhelming the Yahoo! Finance API and avoid getting rate-limited (H
 
 ```toml
 [dependencies]
-yahoo_finance_api = { version = "4.2", features = ["governor"] }
+yahoo_finance_api = { version = "4.3", features = ["governor"] }
 ```
 
 When enabled, `YahooConnector` defaults to **10 requests per second**. Override or disable it at runtime via the builder (this API is only available when the `governor` feature is active):

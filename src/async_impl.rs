@@ -144,26 +144,35 @@ impl YahooConnector {
             )
             .map_err(|_| YahooError::InvalidUrl)?;
 
-            let text = self
+            let response = self
                 .create_client()
                 .await?
                 .get(url)
                 .header("Cookie", self.cookie_header_value())
                 .send()
-                .await?
-                .text()
                 .await?;
+            let status = response.status();
+            let text = response.text().await?;
 
-            // A non-JSON reply (e.g. an HTML error page) usually means the
-            // crumb expired; refresh it and retry once, like
-            // get_financial_events does
-            let result: YQuoteSummary = match serde_json::from_str(&text) {
+            let result: YQuoteSummary = match crate::response::decode_body(
+                text,
+                status,
+                &format!("get_ticker_info: {}", symbol),
+            )
+            .and_then(YQuoteSummary::from_json)
+            {
                 Ok(result) => result,
-                Err(_) if i < max_retries => {
-                    self.crumb = Some(self.get_crumb().await?);
-                    continue;
-                }
-                Err(err) => return Err(YahooError::DeserializeFailed(err)),
+                // A non-JSON reply (e.g. an HTML error page) usually means the
+                // crumb expired; refresh it and retry once, like
+                // get_financial_events does
+                Err(err) if i < max_retries => match &err {
+                    YahooError::EmptyResponse | YahooError::HtmlResponse => {
+                        self.crumb = Some(self.get_crumb().await?);
+                        continue;
+                    }
+                    _ => return Err(err),
+                },
+                Err(err) => return Err(err),
             };
 
             // The v8 API reports errors in `finance.error`, the v10
@@ -550,30 +559,10 @@ impl YahooConnector {
     async fn send_request(&self, url: &str) -> Result<serde_json::Value, YahooError> {
         #[cfg(feature = "governor")]
         self.wait_for_rate_limit().await;
-        let response = self.client.get(url).send().await?.text().await?;
-
-        let json = serde_json::from_str::<serde_json::Value>(&response)
-            .map_err(YahooError::DeserializeFailed);
-
-        if let Err(YahooError::DeserializeFailed(ref _e)) = json {
-            let trimmed_response = response.trim();
-            if trimmed_response.len() <= 4_000
-                && trimmed_response
-                    .to_lowercase()
-                    .contains("too many requests")
-            {
-                Err(YahooError::TooManyRequests(format!("request url: {}", url)))?
-            } else {
-                #[cfg(feature = "debug")]
-                if format!("{}", _e.inner()).contains("expected value") {
-                    Err(YahooError::DeserializeFailedDebug(
-                        trimmed_response.to_string(),
-                    ))?
-                }
-            }
-        }
-
-        json
+        let response = self.client.get(url).send().await?;
+        let status = response.status();
+        let text = response.text().await?;
+        crate::response::decode_body(text, status, url)
     }
 }
 
