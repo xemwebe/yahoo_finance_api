@@ -738,7 +738,9 @@ where
 {
     let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
     match s {
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("infinity") => {
+        serde_json::Value::String(ref v)
+            if v.eq_ignore_ascii_case("infinity") || v.eq_ignore_ascii_case("+infinity") =>
+        {
             Ok(Some(f64::INFINITY))
         }
         serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("-infinity") => {
@@ -750,10 +752,42 @@ where
             .ok_or_else(|| serde::de::Error::custom("Invalid number"))
             .map(Some),
         serde_json::Value::Null => Ok(None),
+        // Yahoo occasionally sends placeholder strings ("N/A", "--", "") in
+        // numeric fields; treat them like `null` instead of failing the whole
+        // quoteSummary response (matches json_value_to_decimal).
+        serde_json::Value::String(_) => Ok(None),
         _ => Err(serde::de::Error::custom(format!(
             "Invalid type for f64: {:?}",
             s
         ))),
+    }
+}
+
+/// Deserialize an `i64` field tolerating numeric strings and placeholder text
+/// (e.g. `totalCash` can arrive as `-613`, `"-613"`, or `"N/A"`). Unknown
+/// strings fall back to `None` instead of failing the whole response.
+fn deserialize_i64_tolerant<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    match s {
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Ok(Some(i))
+            } else {
+                // Float values (e.g. totalCash: 123.9) are truncated.
+                n.as_f64()
+                    .map(|f| Some(f as i64))
+                    .ok_or_else(|| serde::de::Error::custom("Invalid integer"))
+            }
+        }
+        serde_json::Value::String(ref v) => Ok(v
+            .parse::<i64>()
+            .ok()
+            .or_else(|| v.parse::<f64>().ok().map(|f| f as i64))),
+        serde_json::Value::Null => Ok(None),
+        _ => Ok(None),
     }
 }
 
@@ -865,6 +899,12 @@ pub struct SummaryDetail {
     pub strike_price: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub open_interest: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub all_time_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub all_time_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub non_diluted_market_cap: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -986,11 +1026,13 @@ pub struct FinancialData {
     pub number_of_analyst_opinions: Option<u64>,
     /// Cash can be negative on the balance sheet, hence `i64` (Yahoo returns
     /// negative integers for some tickers, e.g. GLABF: -613).
+    #[serde(default, deserialize_with = "deserialize_i64_tolerant")]
     pub total_cash: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub total_cash_per_share: Option<f64>,
     pub ebitda: Option<i64>,
     /// Debt can be negative on the balance sheet, hence `i64`.
+    #[serde(default, deserialize_with = "deserialize_i64_tolerant")]
     pub total_debt: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub quick_ratio: Option<f64>,
@@ -1519,6 +1561,34 @@ pub struct FundValuation {
     pub price_to_sales: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_cashflow: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub median_market_cap: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub three_year_earnings_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_earnings_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_book_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_sales_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_cashflow_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub median_market_cap_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub three_year_earnings_growth_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub duration: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub maturity: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub credit_quality: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub duration_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub maturity_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub credit_quality_cat: Option<f64>,
 }
 
 /// `secFilings` module: SEC filings list.
@@ -1851,6 +1921,61 @@ mod tests {
     }
 
     #[test]
+    fn test_f64_special_tolerates_plus_infinity_and_placeholder() {
+        // "+Infinity" is accepted by the chart seq deserializer but not by
+        // deserialize_f64_special; a single occurrence must not fail the whole
+        // quoteSummary. Unknown placeholder strings ("N/A", "--") fall back to
+        // None like json_value_to_decimal.
+        let json = r#"{
+            "trailingPE": "+Infinity",
+            "bid": "N/A",
+            "ask": "--",
+            "regularMarketOpen": ""
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.trailing_pe, Some(f64::INFINITY));
+        assert_eq!(sd.bid, None);
+        assert_eq!(sd.ask, None);
+        assert_eq!(sd.regular_market_open, None);
+    }
+
+    #[test]
+    fn test_summary_detail_all_time_and_non_diluted_fields() {
+        // allTimeHigh/allTimeLow/nonDilutedMarketCap appear in real AAPL
+        // responses and were previously silently dropped.
+        let json = r#"{
+            "allTimeHigh": 234.5,
+            "allTimeLow": 3.2,
+            "nonDilutedMarketCap": 3500000000000
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.all_time_high, Some(234.5));
+        assert_eq!(sd.all_time_low, Some(3.2));
+        assert_eq!(sd.non_diluted_market_cap, Some(3.5e12));
+    }
+
+    #[test]
+    fn test_fund_valuation_category_and_bond_fields() {
+        // yfinance reads these extra FundValuation fields (funds.py); they were
+        // previously silently dropped.
+        let json = r#"{
+            "priceToEarnings": 18.0,
+            "medianMarketCap": 50000000000,
+            "priceToEarningsCat": 20.0,
+            "threeYearEarningsGrowthCat": "Infinity",
+            "duration": 5.5,
+            "creditQualityCat": "Infinity"
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(18.0));
+        assert_eq!(fv.median_market_cap, Some(5e10));
+        assert_eq!(fv.price_to_earnings_cat, Some(20.0));
+        assert_eq!(fv.three_year_earnings_growth_cat, Some(f64::INFINITY));
+        assert_eq!(fv.duration, Some(5.5));
+        assert_eq!(fv.credit_quality_cat, Some(f64::INFINITY));
+    }
+
+    #[test]
     fn test_company_officer_null_name_title() {
         // Yahoo may return `null` for an officer's name/title; tolerate it.
         let json = r#"{
@@ -2028,6 +2153,41 @@ mod tests {
             .unwrap();
         assert_eq!(financial.total_cash, Some(-613));
         assert_eq!(financial.total_debt, Some(-45822));
+    }
+
+    #[test]
+    fn test_deserialize_total_cash_as_float_and_placeholder() {
+        // totalCash/totalDebt may arrive as floats or placeholder strings; the
+        // tolerant i64 deserializer must not fail the whole quoteSummary.
+        let json = r#"
+        {
+          "quoteSummary": {
+            "result": [
+              {
+                "financialData": {
+                  "totalCash": 123.9,
+                  "totalDebt": "N/A",
+                  "ebitda": 42
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        "#;
+        let summary: YQuoteSummary = serde_json::from_str(json).unwrap();
+        let financial = summary
+            .quote_summary
+            .unwrap()
+            .result
+            .unwrap()
+            .pop()
+            .unwrap()
+            .financial_data
+            .unwrap();
+        assert_eq!(financial.total_cash, Some(123));
+        assert_eq!(financial.total_debt, None);
+        assert_eq!(financial.ebitda, Some(42));
     }
 
     #[test]

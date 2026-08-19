@@ -104,7 +104,15 @@ pub(crate) fn decode_body(
     if body.len() <= 4_000 && body.contains("Will be right back") {
         return Err(YahooError::HtmlResponse);
     }
-    if body.len() <= 4_000 && body.to_ascii_lowercase().contains("too many requests") {
+    // A plain-text rate-limit message is definitive (yfinance raises
+    // YFRateLimitError for it). Only match non-JSON bodies: a valid JSON
+    // error whose description happens to mention "too many requests" (e.g.
+    // `{"chart":{"error":{"code":"InvalidPeriod",...}}}`) must not be
+    // misclassified as a rate limit.
+    if !body.starts_with('{')
+        && !body.starts_with('[')
+        && body.to_ascii_lowercase().contains("too many requests")
+    {
         return Err(YahooError::TooManyRequests(url.to_string()));
     }
 
@@ -271,6 +279,24 @@ mod tests {
                 assert_eq!(err.code.as_deref(), Some("InvalidPeriod"));
             }
             other => panic!("expected ApiError for 422, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_json_mentioning_too_many_requests_not_rate_limit() {
+        // A valid JSON error whose description merely mentions "too many
+        // requests" must be classified as an ApiError, not a rate limit.
+        let json = r#"{"chart":{"error":{"code":"InvalidPeriod","description":"too many requests in period"}}}"#;
+        match parse(json, StatusCode::OK) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("InvalidPeriod"));
+            }
+            other => panic!("expected ApiError, got {:?}", other),
+        }
+        // A plain-text rate-limit body is still definitive.
+        match parse("Too Many Requests", StatusCode::OK) {
+            Err(YahooError::TooManyRequests(_)) => {}
+            other => panic!("expected TooManyRequests, got {:?}", other),
         }
     }
 

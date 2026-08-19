@@ -2,20 +2,26 @@
 //!
 //! Every request pops the next queued response and the request line is
 //! recorded for assertions. Each connection is handled on its own thread so a
-//! slow/stuck client does not block the whole mock; dropping the server closes
-//! the listener. Compiled only when testing (`#[cfg(test)]` on the module).
+//! slow/stuck client does not block the whole mock; dropping the server stops
+//! the accept loop and joins its thread. Compiled only when testing
+//! (`#[cfg(test)]` on the module).
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 type ScriptedResponse = (u16, Vec<(String, String)>, String);
 
 pub(crate) struct MockServer {
     addr: String,
-    listener: Option<TcpListener>,
+    /// Owned by the accept thread (the listener must not be cloned, otherwise
+    /// closing it from `Drop` would not unblock the accepting thread).
+    stop: Arc<AtomicBool>,
+    accept_thread: Option<thread::JoinHandle<()>>,
     requests: Arc<Mutex<Vec<String>>>,
     responses: Arc<Mutex<VecDeque<ScriptedResponse>>>,
 }
@@ -24,18 +30,28 @@ impl MockServer {
     pub(crate) fn start() -> MockServer {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap().to_string();
-        let acceptor = listener.try_clone().expect("failed to clone TcpListener");
+        // Non-blocking so the accept loop can poll the stop flag and exit
+        // without leaking a thread per server instance.
+        listener.set_nonblocking(true).expect("set nonblocking");
         let requests = Arc::new(Mutex::new(Vec::new()));
         let responses = Arc::new(Mutex::new(VecDeque::new()));
         let requests_clone = requests.clone();
         let responses_clone = responses.clone();
-        thread::spawn(move || {
-            for stream in acceptor.incoming() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_clone = stop.clone();
+        let accept_thread = thread::spawn(move || {
+            for stream in listener.incoming() {
                 match stream {
                     Ok(stream) => {
                         let requests = requests_clone.clone();
                         let responses = responses_clone.clone();
                         thread::spawn(move || handle_connection(stream, &requests, &responses));
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        if stop_clone.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(2));
                     }
                     Err(_) => break,
                 }
@@ -43,7 +59,8 @@ impl MockServer {
         });
         MockServer {
             addr,
-            listener: Some(listener),
+            stop,
+            accept_thread: Some(accept_thread),
             requests,
             responses,
         }
@@ -96,8 +113,9 @@ impl MockServer {
 
 impl Drop for MockServer {
     fn drop(&mut self) {
-        if let Some(listener) = self.listener.take() {
-            drop(listener);
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.accept_thread.take() {
+            handle.join().expect("mock server accept thread panicked");
         }
     }
 }
@@ -109,12 +127,22 @@ fn handle_connection(
 ) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut request_line = String::new();
-    if reader.read_line(&mut request_line).is_err() {
+    // Ok(0) means EOF reached with no data: a half-open connection must not
+    // spin the loop.
+    if reader
+        .read_line(&mut request_line)
+        .map(|n| n == 0)
+        .unwrap_or(true)
+    {
         return;
     }
     loop {
         let mut line = String::new();
-        if reader.read_line(&mut line).is_err() || line == "\r\n" || line == "\n" {
+        let read = match reader.read_line(&mut line) {
+            Ok(n) => n,
+            Err(_) => break,
+        };
+        if read == 0 || line == "\r\n" || line == "\n" {
             break;
         }
     }
