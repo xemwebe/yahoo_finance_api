@@ -125,6 +125,13 @@ fn handle_connection(
     requests: &Arc<Mutex<Vec<String>>>,
     responses: &Arc<Mutex<VecDeque<ScriptedResponse>>>,
 ) {
+    // The listener is non-blocking and accepted sockets inherit O_NONBLOCK on
+    // Linux; clear it so the reads below block until data (or EOF) arrive.
+    // A read timeout reaps clients that connect and then send nothing.
+    stream
+        .set_nonblocking(false)
+        .and_then(|_| stream.set_read_timeout(Some(Duration::from_millis(2_000))))
+        .unwrap();
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut request_line = String::new();
     // Ok(0) means EOF reached with no data: a half-open connection must not

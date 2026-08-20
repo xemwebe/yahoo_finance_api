@@ -210,6 +210,9 @@ impl YahooConnector {
                         if i == max_retries {
                             return Err(YahooError::InvalidCrumb);
                         }
+                        // A stale cookie can also surface as a 200 JSON error;
+                        // reset it so get_crumb fetches a matched pair.
+                        self.cookie = None;
                         self.crumb = Some(self.get_crumb()?);
                         continue;
                     }
@@ -219,6 +222,7 @@ impl YahooConnector {
                         if i == max_retries {
                             return Err(YahooError::Unauthorized);
                         }
+                        self.cookie = None;
                         self.crumb = Some(self.get_crumb()?);
                         continue;
                     }
@@ -373,6 +377,10 @@ impl YahooConnector {
                             || code.contains("Invalid Crumb")
                         {
                             if attempt < max_retries {
+                                // Reset the cookie too: a stale cookie can
+                                // surface as a 200 JSON error, and get_crumb
+                                // then fetches a matched cookie+crumb pair.
+                                self.cookie = None;
                                 self.crumb = Some(self.get_crumb()?); // Refetch crumb
                                 continue; // Go to the next iteration
                             } else {
@@ -551,23 +559,32 @@ impl YahooConnector {
             if !status.is_success() {
                 // Yahoo answers an invalid cookie on the crumb endpoint with a
                 // 401 status (not only with an "Invalid Cookie" body): refresh
-                // the cookie and retry, like the body check below. A 403/404
-                // usually means the session expired too — refresh the cookie
-                // and retry once before failing hard (yfinance falls back to
-                // another host/strategy in this situation).
-                if status == reqwest::StatusCode::UNAUTHORIZED
-                    || status == reqwest::StatusCode::FORBIDDEN
-                    || status == reqwest::StatusCode::NOT_FOUND
-                {
+                // the cookie and retry, like the body check below. A 403
+                // usually means the session expired too. A 404 means the
+                // endpoint itself is gone (reported as FetchFailed, not auth).
+                // 5xx are transient — retry once like the other endpoints.
+                let session_expired = status == reqwest::StatusCode::UNAUTHORIZED
+                    || status == reqwest::StatusCode::FORBIDDEN;
+                let endpoint_missing = status == reqwest::StatusCode::NOT_FOUND;
+                if session_expired || endpoint_missing || status.is_server_error() {
                     if _attempt < MAX_RETRIES {
                         self.cookie = Some(self.get_cookie()?);
-                        last_error = YahooError::Unauthorized;
+                        if endpoint_missing {
+                            last_error = YahooError::FetchFailed(format!(
+                                "{} status, GET {} in get_crumb",
+                                status.as_u16(),
+                                self.crumb_url
+                            ));
+                        } else {
+                            last_error = YahooError::Unauthorized;
+                        }
                         continue;
                     }
-                    // Same condition on the final attempt: report the session
-                    // as invalid (Unauthorized) rather than a generic fetch
-                    // failure, matching the first-attempt classification.
-                    return Err(YahooError::Unauthorized);
+                    if session_expired {
+                        // Report the session as invalid (Unauthorized) rather
+                        // than a generic fetch failure.
+                        return Err(YahooError::Unauthorized);
+                    }
                 }
                 return Err(YahooError::FetchFailed(format!(
                     "{} status, GET {} in get_crumb",
@@ -1389,6 +1406,9 @@ mod tests {
             200,
             r#"{"quoteSummary":{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}}"#,
         );
+        // On retry get_crumb runs with cookie=None (reset by the API-error
+        // branch), so it fetches a fresh cookie before the fresh crumb.
+        queue_cookie(&mock);
         queue_crumb(&mock, "xyz");
         queue_summary_success(&mock);
 
@@ -1398,7 +1418,7 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
         assert_eq!(conn.crumb.as_deref(), Some("xyz"));
         let lines = mock.request_lines();
-        assert_eq!(lines.len(), 5);
+        assert_eq!(lines.len(), 6);
     }
 
     #[test]
@@ -2053,6 +2073,9 @@ mod tests {
             200,
             r#"{"finance":{"result":[],"error":{"code":"Invalid Crumb","description":"Invalid Crumb"}}}"#,
         );
+        // On retry get_crumb runs with cookie=None (reset by the API-error
+        // branch), so it fetches a fresh cookie before the fresh crumb.
+        queue_cookie(&mock);
         queue_crumb(&mock, "xyz");
         mock.enqueue_plain(
             200,
@@ -2064,7 +2087,7 @@ mod tests {
         assert!(matches!(result, Err(YahooError::InvalidCrumb)));
         assert_eq!(conn.crumb.as_deref(), Some("xyz"));
         let lines = mock.request_lines();
-        assert_eq!(lines.len(), 5, "unexpected request sequence: {lines:?}");
+        assert_eq!(lines.len(), 6, "unexpected request sequence: {lines:?}");
     }
 
     #[test]
@@ -2109,6 +2132,100 @@ mod tests {
             "got: {}",
             lines[5]
         );
+    }
+
+    #[test]
+    fn test_json_error_refreshes_cookie_and_crumb() {
+        // A stale cookie can surface as a 200 JSON error (not a 401 status);
+        // the API-error retry must reset the cookie so get_crumb fetches a
+        // matched pair (mirror of test_bad_cookie_and_bad_crumb_recovers).
+        let mock = crate::mock_server::MockServer::start();
+        mock.enqueue_plain(
+            200,
+            r#"{"quoteSummary":{"error":{"code":"Unauthorized","description":"Invalid Crumb"}}}"#,
+        );
+        queue_cookie(&mock);
+        queue_crumb(&mock, "xyz");
+        queue_summary_success(&mock);
+
+        let mut conn = mock_connector(&mock);
+        conn.cookie = Some("garbage".to_string());
+        conn.crumb = Some("bogus".to_string());
+
+        let result = conn.get_ticker_info("AAPL");
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+        assert_eq!(conn.crumb.as_deref(), Some("xyz"));
+        assert_eq!(conn.cookie.as_deref(), Some(MOCK_COOKIE));
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 4, "unexpected request sequence: {lines:?}");
+        assert!(lines[0].contains("crumb=bogus"), "got: {}", lines[0]);
+        assert_eq!(lines[1], "GET / HTTP/1.1");
+        assert_eq!(lines[2], "GET /v1/test/getcrumb HTTP/1.1");
+        assert!(lines[3].contains("crumb=xyz"), "got: {}", lines[3]);
+    }
+
+    #[test]
+    fn test_get_crumb_404_returns_fetch_failed() {
+        // A 404 on the crumb endpoint means the endpoint is gone (not a stale
+        // session); the final attempt must report FetchFailed, not Unauthorized.
+        let mock = crate::mock_server::MockServer::start();
+        mock.enqueue_plain(404, "not found");
+        queue_cookie(&mock);
+        mock.enqueue_plain(404, "not found");
+
+        let mut conn = mock_connector(&mock);
+        conn.cookie = Some("mock".to_string());
+        conn.crumb = None;
+
+        let result = conn.get_crumb();
+        assert!(matches!(result, Err(YahooError::FetchFailed(_))));
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 3, "unexpected request sequence: {lines:?}");
+    }
+
+    #[test]
+    fn test_get_crumb_5xx_retries_once() {
+        // A transient 5xx on the crumb endpoint is retried once, like other
+        // endpoints; a fresh cookie is fetched between attempts.
+        let mock = crate::mock_server::MockServer::start();
+        mock.enqueue_plain(500, "boom");
+        queue_cookie(&mock);
+        queue_crumb(&mock, "abc");
+
+        let mut conn = mock_connector(&mock);
+        conn.cookie = Some("mock".to_string());
+        conn.crumb = None;
+
+        let crumb = conn.get_crumb().unwrap();
+        assert_eq!(crumb, "abc");
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 3, "unexpected request sequence: {lines:?}");
+        assert_eq!(lines[1], "GET / HTTP/1.1");
+        assert_eq!(lines[2], "GET /v1/test/getcrumb HTTP/1.1");
+    }
+
+    #[test]
+    fn test_financial_events_null_result_with_error_retries() {
+        // `{"finance":{"result":null,"error":{...}}}` must not hard-fail on
+        // deserialization; the null-tolerant result falls back to empty and the
+        // error path (Invalid Crumb) drives the retry.
+        let mock = crate::mock_server::MockServer::start();
+        queue_cookie(&mock);
+        queue_crumb(&mock, "abc");
+        mock.enqueue_plain(
+            200,
+            r#"{"finance":{"result":null,"error":{"code":"Invalid Crumb","description":"Invalid Crumb"}}}"#,
+        );
+        queue_cookie(&mock);
+        queue_crumb(&mock, "xyz");
+        mock.enqueue_plain(200, earnings_success_json());
+
+        let mut conn = mock_connector(&mock);
+        let events = conn.get_financial_events("AAPL", 25).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(conn.crumb.as_deref(), Some("xyz"));
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 6, "unexpected request sequence: {lines:?}");
     }
 
     fn chart_success_json() -> &'static str {

@@ -101,7 +101,9 @@ pub(crate) fn decode_body(
     }
     // Yahoo serves a short maintenance page when the API is temporarily down.
     // yfinance detects this exact phrase (history.py "Will be right back").
-    if body.len() <= 4_000 && body.contains("Will be right back") {
+    // No length cap: a plain-text outage page longer than 4 KB must still be
+    // classified as a maintenance page (HTML is caught by starts_with('<')).
+    if body.contains("Will be right back") {
         return Err(YahooError::HtmlResponse);
     }
     // A plain-text rate-limit message is definitive (yfinance raises
@@ -194,6 +196,18 @@ mod tests {
         // yfinance detects the exact maintenance phrase "Will be right back".
         let body = "Will be right back\n\nThanks for your patience.";
         match parse(body, StatusCode::OK) {
+            Err(YahooError::HtmlResponse) => {}
+            other => panic!("expected HtmlResponse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_maintenance_page_long_body() {
+        // No length cap: a plain-text outage page longer than 4000 chars (not
+        // HTML) must still be classified as a maintenance page.
+        let mut body = String::from("Will be right back\n");
+        body.push_str(&"x".repeat(5_000));
+        match parse(&body, StatusCode::OK) {
             Err(YahooError::HtmlResponse) => {}
             other => panic!("expected HtmlResponse, got {:?}", other),
         }

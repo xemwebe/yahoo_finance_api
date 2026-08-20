@@ -754,40 +754,13 @@ where
         serde_json::Value::Null => Ok(None),
         // Yahoo occasionally sends placeholder strings ("N/A", "--", "") in
         // numeric fields; treat them like `null` instead of failing the whole
-        // quoteSummary response (matches json_value_to_decimal).
-        serde_json::Value::String(_) => Ok(None),
+        // quoteSummary response (matches json_value_to_decimal). Numeric
+        // strings (e.g. `"12.5"`) are still parsed, not dropped.
+        serde_json::Value::String(ref v) => Ok(v.parse::<f64>().ok()),
         _ => Err(serde::de::Error::custom(format!(
             "Invalid type for f64: {:?}",
             s
         ))),
-    }
-}
-
-/// Deserialize an `i64` field tolerating numeric strings and placeholder text
-/// (e.g. `totalCash` can arrive as `-613`, `"-613"`, or `"N/A"`). Unknown
-/// strings fall back to `None` instead of failing the whole response.
-fn deserialize_i64_tolerant<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
-    match s {
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Ok(Some(i))
-            } else {
-                // Float values (e.g. totalCash: 123.9) are truncated.
-                n.as_f64()
-                    .map(|f| Some(f as i64))
-                    .ok_or_else(|| serde::de::Error::custom("Invalid integer"))
-            }
-        }
-        serde_json::Value::String(ref v) => Ok(v
-            .parse::<i64>()
-            .ok()
-            .or_else(|| v.parse::<f64>().ok().map(|f| f as i64))),
-        serde_json::Value::Null => Ok(None),
-        _ => Ok(None),
     }
 }
 
@@ -1024,16 +997,16 @@ pub struct FinancialData {
     pub recommendation_mean: Option<f64>,
     pub recommendation_key: Option<String>,
     pub number_of_analyst_opinions: Option<u64>,
-    /// Cash can be negative on the balance sheet, hence `i64` (Yahoo returns
-    /// negative integers for some tickers, e.g. GLABF: -613).
-    #[serde(default, deserialize_with = "deserialize_i64_tolerant")]
-    pub total_cash: Option<i64>,
+    /// Cash can be negative on the balance sheet (Yahoo returns negative
+    /// integers for some tickers, e.g. GLABF: -613), hence `f64`.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub total_cash: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub total_cash_per_share: Option<f64>,
     pub ebitda: Option<i64>,
-    /// Debt can be negative on the balance sheet, hence `i64`.
-    #[serde(default, deserialize_with = "deserialize_i64_tolerant")]
-    pub total_debt: Option<i64>,
+    /// Debt can be negative on the balance sheet, hence `f64`.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub total_debt: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub quick_ratio: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
@@ -1629,7 +1602,7 @@ pub struct YEarningsResponse {
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsFinance {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub result: Vec<YEarningsResult>,
     pub error: Option<serde_json::Value>,
 }
@@ -1940,6 +1913,19 @@ mod tests {
     }
 
     #[test]
+    fn test_f64_special_parses_numeric_strings() {
+        // Yahoo sometimes sends numbers as strings ("-0.05", "3500000000000");
+        // they must be parsed, not silently dropped to None.
+        let json = r#"{
+            "52WeekChange": "-0.05",
+            "beta": "N/A"
+        }"#;
+        let sd: DefaultKeyStatistics = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.fifty_two_week_change, Some(-0.05));
+        assert_eq!(sd.beta, None);
+    }
+
+    #[test]
     fn test_summary_detail_all_time_and_non_diluted_fields() {
         // allTimeHigh/allTimeLow/nonDilutedMarketCap appear in real AAPL
         // responses and were previously silently dropped.
@@ -2151,14 +2137,14 @@ mod tests {
             .unwrap()
             .financial_data
             .unwrap();
-        assert_eq!(financial.total_cash, Some(-613));
-        assert_eq!(financial.total_debt, Some(-45822));
+        assert_eq!(financial.total_cash, Some(-613.0));
+        assert_eq!(financial.total_debt, Some(-45822.0));
     }
 
     #[test]
     fn test_deserialize_total_cash_as_float_and_placeholder() {
         // totalCash/totalDebt may arrive as floats or placeholder strings; the
-        // tolerant i64 deserializer must not fail the whole quoteSummary.
+        // tolerant f64 deserializer must not fail the whole quoteSummary.
         let json = r#"
         {
           "quoteSummary": {
@@ -2185,7 +2171,7 @@ mod tests {
             .unwrap()
             .financial_data
             .unwrap();
-        assert_eq!(financial.total_cash, Some(123));
+        assert_eq!(financial.total_cash, Some(123.9));
         assert_eq!(financial.total_debt, None);
         assert_eq!(financial.ebitda, Some(42));
     }
