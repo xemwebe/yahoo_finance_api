@@ -8,7 +8,7 @@
 //! Therefore, the functions need to be called from within another ```async``` function with ```.await``` (e.g. via `#[tokio::main]`).
 //! The examples below are based on the ```tokio``` runtime.
 //!
-//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "4.2", features = ["blocking"]}`.
+//! Use the `blocking` feature to get the previous behavior back: i.e. `yahoo_finance_api = {"version": "5", features = ["blocking"]}`.
 //!
 //! # Features
 //!

@@ -35,7 +35,7 @@ With the `blocking` feature enabled, all of the above methods are available on t
 
 ```toml
 [dependencies]
-yahoo_finance_api = "4.3"
+yahoo_finance_api = "5"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 time = { version = "0.3", features = ["macros"] }
 reqwest = "0.13"
@@ -58,7 +58,7 @@ Minimum supported Rust version: 1.70. See [ReleaseNotes.md](ReleaseNotes.md) for
 | `blocking` | blocking (non-async) API |
 | `governor` | proactive rate limiting, 10 requests/sec by default |
 | `decimal` | represent prices as `rust_decimal::Decimal` instead of `f64` |
-| `debug` | include the full response body in deserialization error messages (only when the error contains "expected value") |
+| `debug` | include the full response body (truncated) in deserialization error messages |
 
 ## Usage
 
@@ -118,7 +118,8 @@ async fn main() {
 
 `YResponse` also exposes the dividends, splits and capital gains recorded in the requested period
 (only for responses obtained via `get_quote_history*`/`get_quote_range`/`get_latest_quotes` —
-`get_quote_period_interval` does not request the `events` data, so these lists are always empty there).
+`get_quote_period_interval` requests the `events` data too, but Yahoo typically returns none
+for intraday ranges, so these lists are usually empty there).
 Note that Yahoo currently often omits the `capitalGains` event entirely, in which case
 `capital_gains()` returns an empty list:
 
@@ -218,7 +219,7 @@ async fn main() {
 
 > **⚠️ Warning:** `get_financial_events`/`get_earnings_only` query Yahoo's
 > `v1/finance/visualization` endpoint, which Yahoo is no longer updating
-> (as of mid-2025). Live checks show it returns historical earnings dates but
+> (as of 2025). Live checks show it returns historical earnings dates but
 > stops at the last quarter Yahoo processed — e.g. AAPL returned nothing newer
 > than 2025-05-01 when last verified. Treat the returned list as historical
 > data, not as a reliable source for upcoming earnings dates. (yfinance
@@ -250,7 +251,7 @@ To prevent overwhelming the Yahoo! Finance API and avoid getting rate-limited (H
 
 ```toml
 [dependencies]
-yahoo_finance_api = { version = "4.3", features = ["governor"] }
+yahoo_finance_api = { version = "5", features = ["governor"] }
 ```
 
 When enabled, `YahooConnector` defaults to **10 requests per second**. Override or disable it at runtime via the builder (this API is only available when the `governor` feature is active):
@@ -274,6 +275,18 @@ fn main() {
         .build().unwrap();
 }
 ```
+
+## Retries
+
+The library retries transient failures automatically:
+
+- Chart requests (`get_quote_*`) retry once when Yahoo answers with an empty body, an HTML
+  block page, or a 5xx.
+- `get_ticker_info` and `get_financial_events` retry once after refreshing the crumb+cookie
+  pair on 401/403/5xx, on a parse error, and on 200-JSON `Invalid Crumb`/`Unauthorized`
+  responses.
+
+HTTP 429 and plain-text `too many requests` bodies are definitive and never retried.
 
 ## Configuring the connector
 
@@ -352,10 +365,10 @@ intervals (`1d`, `5d`, `1wk`, `1mo`, `3mo`) and rejects the rest with an
 
 All methods return `Result<_, YahooError>`. The errors fall into a few categories:
 
-- Transport: `ConnectionFailed` (any reqwest error), `FetchFailed`, `NoResponse`, `InvalidUrl`, `InvalidDateFormat`
-- Yahoo API: `ApiError`, `Unauthorized`, `InvalidCrumb`, `InvalidCookie`, `NoCookies`, `TooManyRequests`, `InvisibleAsciiInCookies`
-- Empty or inconsistent data: `NoResult`, `NoQuotes`, `DataInconsistency`, `MissingField`
-- Deserialization: `DeserializeFailed`; with the `debug` feature, `DeserializeFailedDebug` includes the response body (only when the error contains "expected value")
+- Transport: `ConnectionFailed` (any reqwest error), `FetchFailed`, `ServerError` (5xx), `NoResponse`, `InvalidUrl`, `InvalidDateFormat`
+- Yahoo API: `ApiError`, `Unauthorized` (also 403 — stale session), `InvalidCrumb`, `InvalidCookie`, `NoCookies`, `TooManyRequests`, `InvisibleAsciiInCookies`
+- Empty or inconsistent data: `NoResult`, `NoQuotes`, `DataInconsistency`, `MissingField`, `EmptyResponse` (empty body), `HtmlResponse` (non-JSON HTML body)
+- Deserialization: `DeserializeFailed`; with the `debug` feature, `DeserializeFailedDebug` includes the response body (truncated)
 - Client setup: `BuilderFailed` (reserved, currently not constructed)
 
 ## Contributing

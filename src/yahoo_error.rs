@@ -15,9 +15,8 @@ pub enum YahooError {
     #[error("deserializing response from yahoo! finance failed: {0}")]
     DeserializeFailed(#[from] serde_json::Error),
 
-    /// The response could not be deserialized; the full response body is
-    /// attached (only with the `debug` feature and only when the
-    /// deserialization error contains "expected value").
+    /// The response could not be deserialized; the full response body
+    /// (truncated) is attached. Only compiled with the `debug` feature.
     #[error("deserializing response from yahoo! finance failed, full response body: {0}")]
     DeserializeFailedDebug(String),
 
@@ -36,10 +35,10 @@ pub enum YahooError {
     #[error("yahoo! finance returned api error: {0:?}")]
     ApiError(YErrorMessage),
     /// The response contained no result data.
-    #[error("yahoo! finance returned an empty data set")]
+    #[error("yahoo! finance returned an empty result set")]
     NoResult,
     /// The response contained no valid quotes.
-    #[error("yahoo! finance returned an empty data set")]
+    #[error("yahoo! finance returned no quotes")]
     NoQuotes,
     /// The response data was structurally inconsistent (e.g. mismatched array lengths).
     #[error("yahoo! finance returned inconsistent data")]
