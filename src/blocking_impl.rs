@@ -136,10 +136,9 @@ impl YahooConnector {
             ));
         }
         if self.crumb.is_none() {
+            // get_crumb fetches a cookie first when none is cached, so no
+            // separate cookie setup is needed here.
             self.crumb = Some(self.get_crumb()?);
-        }
-        if self.cookie.is_none() {
-            self.cookie = Some(self.get_cookie()?);
         }
 
         let max_retries = 1;
@@ -205,27 +204,23 @@ impl YahooConnector {
                 .or_else(|| result.quote_summary.as_ref().and_then(|q| q.error.as_ref()));
 
             if let Some(error) = api_error {
-                if let Some(description) = &error.description {
-                    if description.contains("Invalid Crumb") {
-                        if i == max_retries {
-                            return Err(YahooError::InvalidCrumb);
-                        }
-                        // A stale cookie can also surface as a 200 JSON error;
-                        // reset it so get_crumb fetches a matched pair.
-                        self.cookie = None;
-                        self.crumb = Some(self.get_crumb()?);
-                        continue;
+                let is_session_expired = error
+                    .description
+                    .as_deref()
+                    .is_some_and(|d| d.contains("Invalid Crumb"))
+                    || error
+                        .code
+                        .as_deref()
+                        .is_some_and(|c| c.contains("Unauthorized") || c.contains("Invalid Crumb"));
+                if is_session_expired {
+                    if i == max_retries {
+                        return Err(YahooError::InvalidCrumb);
                     }
-                }
-                if let Some(code) = &error.code {
-                    if code.contains("Unauthorized") {
-                        if i == max_retries {
-                            return Err(YahooError::Unauthorized);
-                        }
-                        self.cookie = None;
-                        self.crumb = Some(self.get_crumb()?);
-                        continue;
-                    }
+                    // A stale cookie can also surface as a 200 JSON error;
+                    // reset it so get_crumb fetches a matched pair.
+                    self.cookie = None;
+                    self.crumb = Some(self.get_crumb()?);
+                    continue;
                 }
                 // Any other API-level error (e.g. unknown symbol) is
                 // reported to the caller instead of returning Ok
@@ -254,12 +249,10 @@ impl YahooConnector {
             ));
         }
 
-        // Ensure we have crumb for authentication
+        // Ensure we have crumb for authentication (get_crumb also fetches a
+        // cookie first when none is cached).
         if self.crumb.is_none() {
             self.crumb = Some(self.get_crumb()?);
-        }
-        if self.cookie.is_none() {
-            self.cookie = Some(self.get_cookie()?);
         }
 
         // Create request body
@@ -342,14 +335,15 @@ impl YahooConnector {
                         ticker
                     )));
                 }
-                // 5xx are transient; retry once with a fresh crumb, like yfinance
-                // does for any status >= 400.
+                // 5xx are transient; retry once with a fresh session, like
+                // yfinance does for any status >= 400 (it resets both).
                 status if status.is_server_error() => {
                     if attempt < max_retries {
+                        self.cookie = None;
                         self.crumb = Some(self.get_crumb()?);
                         continue;
                     } else {
-                        return Err(YahooError::FetchFailed(format!("HTTP error: {}", status)));
+                        return Err(YahooError::ServerError(format!("HTTP error: {}", status)));
                     }
                 }
                 _ if !status.is_success() => {
@@ -439,10 +433,12 @@ impl YahooConnector {
                     continue;
                 }
 
-                // Map column names to indices
+                // Map column names to indices (skip columns without a label)
                 let mut column_map = std::collections::HashMap::new();
                 for (index, column) in document.columns.iter().enumerate() {
-                    column_map.insert(column.label.as_str(), index);
+                    if let Some(label) = &column.label {
+                        column_map.insert(label.as_str(), index);
+                    }
                 }
 
                 // Parse each row; a single malformed row (e.g. a null date) must not
@@ -500,9 +496,9 @@ impl YahooConnector {
             "11" => "Meeting".to_string(),
             other => other.to_string(),
         };
-        let eps_estimate = get_value("EPS Estimate").and_then(|v| v.as_f64());
-        let reported_eps = get_value("Reported EPS").and_then(|v| v.as_f64());
-        let surprise_percent = get_value("Surprise (%)").and_then(|v| v.as_f64());
+        let eps_estimate = get_value("EPS Estimate").and_then(json_value_to_f64);
+        let reported_eps = get_value("Reported EPS").and_then(json_value_to_f64);
+        let surprise_percent = get_value("Surprise (%)").and_then(json_value_to_f64);
         let timezone = get_value("Timezone short name")
             .and_then(|v| v.as_str())
             .map(String::from);
@@ -585,6 +581,15 @@ impl YahooConnector {
                         // than a generic fetch failure.
                         return Err(YahooError::Unauthorized);
                     }
+                    if status.is_server_error() {
+                        // A persistent 5xx is a transient server error, not a
+                        // fetch/classification failure.
+                        return Err(YahooError::ServerError(format!(
+                            "{} status, GET {} in get_crumb",
+                            status.as_u16(),
+                            self.crumb_url
+                        )));
+                    }
                 }
                 return Err(YahooError::FetchFailed(format!(
                     "{} status, GET {} in get_crumb",
@@ -605,7 +610,7 @@ impl YahooConnector {
                 continue;
             }
 
-            if crumb.contains("Too Many Requests") {
+            if crumb.to_ascii_lowercase().contains("too many requests") {
                 // A rate limit is definitive (see test_429_is_not_retried):
                 // retrying would only add load to an already-limited endpoint.
                 return Err(YahooError::TooManyRequests(format!(
@@ -726,6 +731,13 @@ impl YahooConnector {
         }
         Err(last_error)
     }
+}
+
+/// Extract a float from a JSON value, tolerating numeric strings ("1.6") as
+/// well as bare numbers (yfinance coerces these via `astype('float64')`).
+fn json_value_to_f64(v: &serde_json::Value) -> Option<f64> {
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
 }
 
 #[cfg(test)]
@@ -1684,8 +1696,9 @@ mod tests {
 
     #[test]
     fn test_get_crumb_unauthorized_on_exhausted_401() {
-        // Two 401/403/404 responses on the crumb endpoint must surface as
+        // Two 401/403 responses on the crumb endpoint must surface as
         // Unauthorized (not FetchFailed) so callers can key on the variant.
+        // (A 404 on the final attempt is reported as FetchFailed instead.)
         let mock = crate::mock_server::MockServer::start();
         mock.enqueue(401, &[], "");
         queue_cookie(&mock);
@@ -1934,6 +1947,44 @@ mod tests {
     }
 
     #[test]
+    fn test_financial_events_string_numeric_cells() {
+        // EPS fields can arrive as numeric strings; they must be parsed (yfinance
+        // coerces them via astype('float64')).
+        let json = r#"{
+            "finance": {
+                "result": [
+                    {
+                        "documents": [
+                            {
+                                "columns": [
+                                    {"label": "Event Start Date"},
+                                    {"label": "EPS Estimate"},
+                                    {"label": "Reported EPS"},
+                                    {"label": "Surprise (%)"},
+                                    {"label": "Event Type"}
+                                ],
+                                "rows": [["2025-05-01T20:30:00.000Z", "1.6", "1.7", "6.25", "2"]]
+                            }
+                        ]
+                    }
+                ],
+                "error": null
+            }
+        }"#;
+        let mock = crate::mock_server::MockServer::start();
+        queue_cookie(&mock);
+        queue_crumb(&mock, "abc");
+        mock.enqueue_plain(200, json);
+
+        let mut conn = mock_connector(&mock);
+        let events = conn.get_financial_events("AAPL", 25).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].eps_estimate, Some(1.6));
+        assert_eq!(events[0].reported_eps, Some(1.7));
+        assert_eq!(events[0].surprise_percent, Some(6.25));
+    }
+
+    #[test]
     fn test_financial_events_multiple_documents_aggregated() {
         // The schema allows multiple documents/results (one per event type);
         // all of them must be parsed, not just the first.
@@ -2033,11 +2084,14 @@ mod tests {
 
     #[test]
     fn test_financial_events_500_retries_once() {
-        // 5xx -> retry once with a fresh crumb, then succeed.
+        // 5xx -> retry once with a fresh session, then succeed.
         let mock = crate::mock_server::MockServer::start();
         queue_cookie(&mock);
         queue_crumb(&mock, "abc");
         mock.enqueue_plain(500, "boom");
+        // On retry get_crumb runs with cookie=None (reset by the 5xx branch),
+        // so it fetches a fresh cookie before the fresh crumb.
+        queue_cookie(&mock);
         queue_crumb(&mock, "xyz");
         mock.enqueue_plain(200, earnings_success_json());
 
@@ -2046,7 +2100,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(conn.crumb.as_deref(), Some("xyz"));
         let lines = mock.request_lines();
-        assert_eq!(lines.len(), 5, "unexpected request sequence: {lines:?}");
+        assert_eq!(lines.len(), 6, "unexpected request sequence: {lines:?}");
     }
 
     #[test]
@@ -2181,6 +2235,54 @@ mod tests {
         assert!(matches!(result, Err(YahooError::FetchFailed(_))));
         let lines = mock.request_lines();
         assert_eq!(lines.len(), 3, "unexpected request sequence: {lines:?}");
+    }
+
+    #[test]
+    fn test_get_crumb_500_500_returns_server_error() {
+        // Two consecutive 5xx on the crumb endpoint must surface as ServerError
+        // (transient), not FetchFailed — consistent with decode_body.
+        let mock = crate::mock_server::MockServer::start();
+        mock.enqueue_plain(500, "boom");
+        queue_cookie(&mock);
+        mock.enqueue_plain(500, "boom");
+
+        let mut conn = mock_connector(&mock);
+        conn.cookie = Some("mock".to_string());
+        conn.crumb = None;
+
+        let result = conn.get_crumb();
+        assert!(matches!(result, Err(YahooError::ServerError(_))));
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 3, "unexpected request sequence: {lines:?}");
+    }
+
+    #[test]
+    fn test_json_error_code_only_invalid_crumb_retries() {
+        // A 200 JSON error with `code: "Invalid Crumb"` and NO description
+        // must still trigger the session refresh + retry (the description
+        // check alone would miss it).
+        let mock = crate::mock_server::MockServer::start();
+        mock.enqueue_plain(
+            200,
+            r#"{"quoteSummary":{"error":{"code":"Invalid Crumb"}}}"#,
+        );
+        queue_cookie(&mock);
+        queue_crumb(&mock, "xyz");
+        queue_summary_success(&mock);
+
+        let mut conn = mock_connector(&mock);
+        conn.cookie = Some("garbage".to_string());
+        conn.crumb = Some("bogus".to_string());
+
+        let result = conn.get_ticker_info("AAPL");
+        assert!(result.is_ok(), "expected Ok, got {:?}", result.err());
+        assert_eq!(conn.crumb.as_deref(), Some("xyz"));
+        let lines = mock.request_lines();
+        assert_eq!(lines.len(), 4, "unexpected request sequence: {lines:?}");
+        assert!(lines[0].contains("crumb=bogus"), "got: {}", lines[0]);
+        assert_eq!(lines[1], "GET / HTTP/1.1");
+        assert_eq!(lines[2], "GET /v1/test/getcrumb HTTP/1.1");
+        assert!(lines[3].contains("crumb=xyz"), "got: {}", lines[3]);
     }
 
     #[test]

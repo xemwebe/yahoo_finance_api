@@ -699,7 +699,7 @@ pub struct AssetProfile {
     pub industry: Option<String>,
     pub sector: Option<String>,
     pub long_business_summary: Option<String>,
-    pub full_time_employees: Option<u32>,
+    pub full_time_employees: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub company_officers: Vec<CompanyOfficer>,
     pub audit_risk: Option<u16>,
@@ -737,16 +737,28 @@ where
     D: Deserializer<'de>,
 {
     let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    // Some modules (topHoldings/fundProfile) send values as `{"raw": ..., "fmt":
+    // ...}` dicts even with formatted=false; unwrap the raw value like yfinance's
+    // _parse_raw_values (funds.py). Objects without a raw key → None.
+    let s = match s {
+        serde_json::Value::Object(map) => {
+            map.get("raw").cloned().unwrap_or(serde_json::Value::Null)
+        }
+        other => other,
+    };
     match s {
-        serde_json::Value::String(ref v)
-            if v.eq_ignore_ascii_case("infinity") || v.eq_ignore_ascii_case("+infinity") =>
-        {
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("infinity") => {
             Ok(Some(f64::INFINITY))
         }
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("-infinity") => {
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("+infinity") => {
+            Ok(Some(f64::INFINITY))
+        }
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("-infinity") => {
             Ok(Some(f64::NEG_INFINITY))
         }
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("nan") => Ok(Some(f64::NAN)),
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("nan") => {
+            Ok(Some(f64::NAN))
+        }
         serde_json::Value::Number(n) => n
             .as_f64()
             .ok_or_else(|| serde::de::Error::custom("Invalid number"))
@@ -764,16 +776,22 @@ where
     }
 }
 
-/// Deserialize a sequence field tolerating an explicit `null` (which Yahoo
-/// sends for some asset classes) by falling back to an empty vector.
-/// `#[serde(default)]` alone only covers a *missing* field, not `null`.
+/// Deserialize a sequence field tolerating `null`, an empty object `{}`, or a
+/// placeholder string (which Yahoo sends for some asset classes) by falling
+/// back to an empty vector. `#[serde(default)]` alone only covers a *missing*
+/// field, not these explicit values.
 fn deserialize_nullable_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de>,
 {
-    let opt = Option::<Vec<T>>::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_default())
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null | serde_json::Value::Object(_) | serde_json::Value::String(_) => {
+            Ok(Vec::new())
+        }
+        other => Vec::<T>::deserialize(other).map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -1623,7 +1641,7 @@ pub struct YEarningsDocument {
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsColumn {
-    pub label: String,
+    pub label: Option<String>,
 }
 
 /// A financial event (earnings, meeting or call) returned by
@@ -1923,6 +1941,70 @@ mod tests {
         let sd: DefaultKeyStatistics = serde_json::from_str(json).unwrap();
         assert_eq!(sd.fifty_two_week_change, Some(-0.05));
         assert_eq!(sd.beta, None);
+    }
+
+    #[test]
+    fn test_f64_special_unwraps_raw_dict() {
+        // topHoldings/fundProfile values can arrive as `{"raw": ..., "fmt": ...}`
+        // dicts even with formatted=false (yfinance's _parse_raw_values handles
+        // both shapes); a dict without raw -> None.
+        let json = r#"{
+            "priceToEarnings": {"raw": 18.0, "fmt": "18.00"},
+            "priceToBook": {"raw": 4.2},
+            "priceToSales": {"foo": 1}
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(18.0));
+        assert_eq!(fv.price_to_book, Some(4.2));
+        assert_eq!(fv.price_to_sales, None);
+    }
+
+    #[test]
+    fn test_f64_special_trims_whitespace_in_special_values() {
+        // "NaN " / "Infinity " with surrounding whitespace must still map to
+        // their IEEE values, not be dropped by the generic string parse.
+        let json = r#"{
+            "trailingPE": "NaN ",
+            "beta": " Infinity ",
+            "bid": "12.5"
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert!(sd.trailing_pe.unwrap().is_nan());
+        assert_eq!(sd.beta, Some(f64::INFINITY));
+        assert_eq!(sd.bid, Some(12.5));
+    }
+
+    #[test]
+    fn test_nullable_vec_tolerates_empty_object() {
+        // Yahoo sometimes sends an empty object `{}` instead of an array for a
+        // sequence field; it must fall back to an empty vec, not fail.
+        let json = r#"{
+            "trend": {},
+            "maxAge": 1
+        }"#;
+        let rt: RecommendationTrend = serde_json::from_str(json).unwrap();
+        assert!(rt.trend.is_empty());
+    }
+
+    #[test]
+    fn test_earnings_column_null_label_tolerated() {
+        // A null column label must not fail the whole earnings response.
+        let json = r#"{
+            "label": null
+        }"#;
+        let col: YEarningsColumn = serde_json::from_str(json).unwrap();
+        assert!(col.label.is_none());
+    }
+
+    #[test]
+    fn test_negative_full_time_employees() {
+        // Yahoo has emitted negative employee counts; i64 tolerates them while
+        // u32 would fail the whole response.
+        let json = r#"{
+            "fullTimeEmployees": -5
+        }"#;
+        let ap: AssetProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(ap.full_time_employees, Some(-5));
     }
 
     #[test]

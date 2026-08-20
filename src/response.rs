@@ -93,6 +93,8 @@ pub(crate) fn decode_body(
     }
 
     let body = text.trim();
+    // Strip a UTF-8 BOM some proxies prepend to the body before classification.
+    let body = body.trim_start_matches('\u{feff}');
     if body.is_empty() {
         return Err(YahooError::EmptyResponse);
     }
@@ -103,7 +105,11 @@ pub(crate) fn decode_body(
     // yfinance detects this exact phrase (history.py "Will be right back").
     // No length cap: a plain-text outage page longer than 4 KB must still be
     // classified as a maintenance page (HTML is caught by starts_with('<')).
-    if body.contains("Will be right back") {
+    // Only match non-JSON bodies, like the rate-limit check below: a valid
+    // JSON error whose description mentions the phrase must not be
+    // misclassified (a long JSON body containing it used to slip past the old
+    // 4 KB cap).
+    if !body.starts_with('{') && !body.starts_with('[') && body.contains("Will be right back") {
         return Err(YahooError::HtmlResponse);
     }
     // A plain-text rate-limit message is definitive (yfinance raises
@@ -211,6 +217,28 @@ mod tests {
             Err(YahooError::HtmlResponse) => {}
             other => panic!("expected HtmlResponse, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_decode_json_mentioning_will_be_right_back_not_maintenance() {
+        // A valid JSON error whose description mentions the maintenance phrase
+        // must be parsed as JSON (ApiError), not misclassified as a page.
+        let json =
+            r#"{"chart":{"error":{"code":"ServerError","description":"Will be right back"}}}"#;
+        match parse(json, StatusCode::OK) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("ServerError"));
+            }
+            other => panic!("expected ApiError, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_bom_prefixed_json() {
+        // A UTF-8 BOM prepended by a proxy must not break JSON classification.
+        let body = format!("\u{feff}{}", r#"{"chart":{"result":[1],"error":null}}"#);
+        let parsed = parse(&body, StatusCode::OK).unwrap();
+        assert_eq!(parsed["chart"]["result"][0], 1);
     }
 
     #[test]
