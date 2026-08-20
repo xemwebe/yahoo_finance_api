@@ -1,3 +1,4 @@
+// Retrieve the quotes and dividends of a ticker for a given period.
 use time::macros::datetime;
 use time::OffsetDateTime;
 
@@ -19,7 +20,7 @@ async fn main() {
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
-    // Display dividends paid during the requested period
+    // Display dividends recorded in the period (date is the ex-dividend date)
     println!("DIVIDENDS");
     for dividend in hist.dividends().unwrap() {
         let date = OffsetDateTime::from_unix_timestamp(dividend.date).unwrap();
@@ -42,7 +43,7 @@ fn main() {
         println!("{} | {:.2} | {:.2}", time, quote.open, quote.close);
     }
 
-    // Display dividends paid during the requested period
+    // Display dividends recorded in the period (date is the ex-dividend date)
     println!("DIVIDENDS");
     for dividend in hist.dividends().unwrap() {
         let date = OffsetDateTime::from_unix_timestamp(dividend.date).unwrap();

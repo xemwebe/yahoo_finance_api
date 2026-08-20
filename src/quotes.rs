@@ -28,7 +28,11 @@ pub struct YResponse {
 
 impl YResponse {
     pub(crate) fn map_error_msg(self) -> Result<YResponse, YahooError> {
-        if self.chart.result.is_none() {
+        let empty = match &self.chart.result {
+            None => true,
+            Some(r) => r.is_empty(),
+        };
+        if empty {
             if let Some(y_error) = self.chart.error {
                 return Err(YahooError::ApiError(y_error));
             }
@@ -40,6 +44,9 @@ impl YResponse {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
 
         for stock in result {
             let n = stock.timestamp.as_ref().map_or(0, |v| v.len());
@@ -48,6 +55,9 @@ impl YResponse {
                 return Err(YahooError::NoQuotes);
             }
 
+            if stock.indicators.quote.is_empty() {
+                return Err(YahooError::DataInconsistency);
+            }
             let quote = &stock.indicators.quote[0];
 
             if quote.open.is_none()
@@ -68,10 +78,22 @@ impl YResponse {
             if open_len != n || high_len != n || low_len != n || volume_len != n || close_len != n {
                 return Err(YahooError::DataInconsistency);
             }
+
+            if let Some(adjclose) = &stock.indicators.adjclose {
+                if adjclose.is_empty() {
+                    return Err(YahooError::DataInconsistency);
+                }
+                if let Some(series) = &adjclose[0].adjclose {
+                    if series.len() != n {
+                        return Err(YahooError::DataInconsistency);
+                    }
+                }
+            }
         }
         Ok(result)
     }
 
+    /// Deserialize a [`YResponse`] from a JSON value returned by the chart API.
     pub fn from_json(json: serde_json::Value) -> Result<YResponse, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
@@ -93,6 +115,9 @@ impl YResponse {
         Err(YahooError::NoQuotes)
     }
 
+    /// Return all valid quotes (open, high, low, close, volume) for the requested
+    /// time period. Bars whose close is missing are skipped; other missing
+    /// fields within a bar are replaced by zero.
     pub fn quotes(&self) -> Result<Vec<Quote>, YahooError> {
         let stock = &self.check_historical_consistency()?[0];
 
@@ -108,20 +133,28 @@ impl YResponse {
         Ok(quotes)
     }
 
+    /// Return the metadata (symbol, exchange, timezone, trading periods, ...) of
+    /// the requested ticker.
     pub fn metadata(&self) -> Result<YMetaData, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
         Ok(stock.meta.to_owned())
     }
 
     /// This method retrieves information about the splits that might have
-    /// occured during the considered time period
+    /// occurred during the considered time period
     pub fn splits(&self) -> Result<Vec<Split>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -137,11 +170,14 @@ impl YResponse {
     /// This method retrieves information about the dividends that have
     /// been recorded during the considered time period.
     ///
-    /// Note: Date is the ex-dividend date)
+    /// Note: date is the ex-dividend date
     pub fn dividends(&self) -> Result<Vec<Dividend>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -155,11 +191,14 @@ impl YResponse {
     }
 
     /// This method retrieves information about the capital gains that might have
-    /// occured during the considered time period (available only for Mutual Funds)
+    /// occurred during the considered time period (available only for Mutual Funds)
     pub fn capital_gains(&self) -> Result<Vec<CapitalGain>, YahooError> {
         let Some(result) = &self.chart.result else {
             return Err(YahooError::NoResult);
         };
+        if result.is_empty() {
+            return Err(YahooError::NoResult);
+        }
         let stock = &result[0];
 
         if let Some(events) = &stock.events {
@@ -210,7 +249,7 @@ pub struct YMetaData {
     pub exchange_name: String,
     pub full_exchange_name: String,
     #[serde(default)]
-    pub first_trade_date: Option<i32>,
+    pub first_trade_date: Option<i64>,
     pub regular_market_time: Option<u32>,
     pub gmtoffset: i32,
     pub timezone: String,
@@ -235,13 +274,25 @@ pub struct YMetaData {
     #[serde(default)]
     pub scale: Option<i32>,
     pub price_hint: i32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_current_trading_period")]
     pub current_trading_period: CurrentTradingPeriod,
     #[serde(default)]
     pub trading_periods: TradingPeriods,
     pub data_granularity: String,
     pub range: String,
+    #[serde(default)]
     pub valid_ranges: Vec<String>,
+}
+
+/// Deserialize `currentTradingPeriod`, tolerating an explicit `null` (which
+/// Yahoo returns for some asset classes) by falling back to the default value.
+fn deserialize_current_trading_period<'de, D>(
+    deserializer: D,
+) -> Result<CurrentTradingPeriod, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<CurrentTradingPeriod>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize)]
@@ -273,13 +324,20 @@ impl<'de> Deserialize<'de> for TradingPeriods {
                 formatter.write_str("struct (or array) TradingPeriods")
             }
 
+            fn visit_unit<E>(self) -> Result<TradingPeriods, E>
+            where
+                E: de::Error,
+            {
+                Ok(TradingPeriods::default())
+            }
+
             fn visit_seq<V>(self, mut seq: V) -> Result<TradingPeriods, V::Error>
             where
                 V: SeqAccess<'de>,
             {
                 let mut regular: Vec<PeriodInfo> = Vec::new();
 
-                while let Ok(Some(mut e)) = seq.next_element::<Vec<PeriodInfo>>() {
+                while let Some(mut e) = seq.next_element::<Vec<PeriodInfo>>()? {
                     regular.append(&mut e);
                 }
 
@@ -411,6 +469,7 @@ pub struct AdjClose {
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct QuoteList {
+    #[serde(default)]
     pub volume: Option<Vec<Option<u64>>>,
     #[serde(default, deserialize_with = "deserialize_optional_decimal_seq")]
     pub high: Option<Vec<Option<Decimal>>>,
@@ -507,10 +566,10 @@ pub struct EventsBlock {
     pub capital_gains: Option<HashMap<i64, CapitalGain>>,
 }
 
-/// This structure simply models a split that has occured.
+/// This structure simply models a split that has occurred.
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct Split {
-    /// This is the date (timestamp) when the split occured
+    /// This is the date (timestamp) when the split occurred
     pub date: i64,
     /// Numerator of the split. For instance a 1:5 split means you get 5 share
     /// wherever you had one before the split. (Here the numerator is 1 and
@@ -559,7 +618,7 @@ pub struct YFinance {
     pub error: Option<YErrorMessage>,
 }
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct YErrorMessage {
     pub code: Option<String>,
     pub description: Option<String>,
@@ -572,11 +631,36 @@ pub struct ExtendedQuoteSummary {
 }
 
 impl YQuoteSummary {
+    /// Deserialize a [`YQuoteSummary`] from a JSON value returned by the
+    /// quoteSummary API.
     pub fn from_json(json: serde_json::Value) -> Result<YQuoteSummary, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
+
+    /// True if the response carries at least one result block (v8 `finance`
+    /// or v10 `quoteSummary`), i.e. the API actually returned data.
+    pub(crate) fn has_result(&self) -> bool {
+        let v10 = self
+            .quote_summary
+            .as_ref()
+            .and_then(|q| q.result.as_ref())
+            .is_some_and(|r| !r.is_empty());
+        let v8 = self
+            .finance
+            .as_ref()
+            .and_then(|f| f.result.as_ref())
+            .is_some_and(|r| {
+                r.as_object().is_some_and(|o| !o.is_empty())
+                    || r.as_array().is_some_and(|a| !a.is_empty())
+            });
+        v10 || v8
+    }
 }
 
+/// `quoteSummary` module: all 20 modules of the quoteSummary API (company
+/// profile, summary detail, financial data, recommendations, calendar,
+/// holders, fund profile, sec filings, ...). Only the modules that apply to
+/// the asset type are present, the rest is `None`.
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YSummaryData {
@@ -585,6 +669,21 @@ pub struct YSummaryData {
     pub default_key_statistics: Option<DefaultKeyStatistics>,
     pub quote_type: Option<QuoteType>,
     pub financial_data: Option<FinancialData>,
+    pub recommendation_trend: Option<RecommendationTrend>,
+    pub earnings_trend: Option<EarningsTrend>,
+    pub earnings_history: Option<EarningsHistory>,
+    pub earnings: Option<Earnings>,
+    pub upgrade_downgrade_history: Option<UpgradeDowngradeHistory>,
+    pub calendar_events: Option<CalendarEvents>,
+    pub insider_holders: Option<InsiderHolders>,
+    pub insider_transactions: Option<InsiderTransactions>,
+    pub major_holders_breakdown: Option<MajorHoldersBreakdown>,
+    pub institution_ownership: Option<InstitutionOwnership>,
+    pub fund_ownership: Option<FundOwnership>,
+    pub net_share_purchase_activity: Option<NetSharePurchaseActivity>,
+    pub fund_profile: Option<FundProfile>,
+    pub top_holdings: Option<TopHoldings>,
+    pub sec_filings: Option<SecFilings>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -600,7 +699,8 @@ pub struct AssetProfile {
     pub industry: Option<String>,
     pub sector: Option<String>,
     pub long_business_summary: Option<String>,
-    pub full_time_employees: Option<u32>,
+    pub full_time_employees: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub company_officers: Vec<CompanyOfficer>,
     pub audit_risk: Option<u16>,
     pub board_risk: Option<u16>,
@@ -616,9 +716,9 @@ pub struct AssetProfile {
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanyOfficer {
-    pub name: String,
+    pub name: Option<String>,
     pub age: Option<u32>,
-    pub title: String,
+    pub title: Option<String>,
     pub year_born: Option<u32>,
     pub fiscal_year: Option<u32>,
     pub total_pay: Option<ValueWrapper>,
@@ -637,23 +737,60 @@ where
     D: Deserializer<'de>,
 {
     let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    // Some modules (topHoldings/fundProfile) send values as `{"raw": ..., "fmt":
+    // ...}` dicts even with formatted=false; unwrap the raw value like yfinance's
+    // _parse_raw_values (funds.py). Objects without a raw key → None.
+    let s = match s {
+        serde_json::Value::Object(map) => {
+            map.get("raw").cloned().unwrap_or(serde_json::Value::Null)
+        }
+        other => other,
+    };
     match s {
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("infinity") => {
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("infinity") => {
             Ok(Some(f64::INFINITY))
         }
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("-infinity") => {
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("+infinity") => {
+            Ok(Some(f64::INFINITY))
+        }
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("-infinity") => {
             Ok(Some(f64::NEG_INFINITY))
         }
-        serde_json::Value::String(ref v) if v.eq_ignore_ascii_case("nan") => Ok(Some(f64::NAN)),
+        serde_json::Value::String(ref v) if v.trim().eq_ignore_ascii_case("nan") => {
+            Ok(Some(f64::NAN))
+        }
         serde_json::Value::Number(n) => n
             .as_f64()
             .ok_or_else(|| serde::de::Error::custom("Invalid number"))
             .map(Some),
         serde_json::Value::Null => Ok(None),
+        // Yahoo occasionally sends placeholder strings ("N/A", "--", "") in
+        // numeric fields; treat them like `null` instead of failing the whole
+        // quoteSummary response (matches json_value_to_decimal). Numeric
+        // strings (e.g. `"12.5"`) are still parsed, not dropped.
+        serde_json::Value::String(ref v) => Ok(v.parse::<f64>().ok()),
         _ => Err(serde::de::Error::custom(format!(
             "Invalid type for f64: {:?}",
             s
         ))),
+    }
+}
+
+/// Deserialize a sequence field tolerating `null`, an empty object `{}`, or a
+/// placeholder string (which Yahoo sends for some asset classes) by falling
+/// back to an empty vector. `#[serde(default)]` alone only covers a *missing*
+/// field, not these explicit values.
+fn deserialize_nullable_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null | serde_json::Value::Object(_) | serde_json::Value::String(_) => {
+            Ok(Vec::new())
+        }
+        other => Vec::<T>::deserialize(other).map_err(serde::de::Error::custom),
     }
 }
 
@@ -662,21 +799,35 @@ where
 pub struct SummaryDetail {
     pub max_age: Option<i64>,
     pub price_hint: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub previous_close: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub open: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub day_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub day_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_previous_close: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_open: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_day_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub regular_market_day_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub dividend_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub dividend_yield: Option<f64>,
     pub ex_dividend_date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub payout_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub five_year_avg_dividend_yield: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub beta: Option<f64>,
-    /// The trailing_pe field may contain the string "Infinity" instead of f64, in which case we return f64::MAX
+    /// The trailing_pe field may contain the string "Infinity" instead of f64,
+    /// in which case we return f64::INFINITY (same for "-Infinity" and "NaN")
     #[serde(
         default,
         deserialize_with = "deserialize_f64_special",
@@ -696,14 +847,22 @@ pub struct SummaryDetail {
     pub average_volume_10days: Option<u64>,
     #[serde(rename = "averageDailyVolume10Day")]
     pub average_daily_volume_10day: Option<u64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub bid: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub ask: Option<f64>,
     pub bid_size: Option<i64>,
     pub ask_size: Option<i64>,
     pub market_cap: Option<u64>,
-    #[serde(rename = "yield")]
+    #[serde(
+        rename = "yield",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub yield_: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_two_week_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_two_week_high: Option<f64>,
     #[serde(
         default,
@@ -711,8 +870,11 @@ pub struct SummaryDetail {
         deserialize_with = "deserialize_f64_special"
     )]
     pub price_to_sales_trailing12months: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub fifty_day_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub two_hundred_day_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_annual_dividend_rate: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_annual_dividend_yield: Option<f64>,
@@ -724,8 +886,16 @@ pub struct SummaryDetail {
     pub algorithm: Option<String>,
     pub tradeable: Option<bool>,
     pub expire_date: Option<u32>,
-    pub strike_price: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub strike_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub open_interest: Option<Decimal>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub all_time_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub all_time_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub non_diluted_market_cap: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -740,6 +910,7 @@ pub struct DefaultKeyStatistics {
         deserialize_with = "deserialize_f64_special"
     )]
     pub forward_pe: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margins: Option<f64>,
     pub float_shares: Option<u64>,
     pub shares_outstanding: Option<u64>,
@@ -747,15 +918,23 @@ pub struct DefaultKeyStatistics {
     pub shares_short_prior_month: Option<u64>,
     pub shares_short_previous_month_date: Option<u64>,
     pub date_short_interest: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub shares_percent_shares_out: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub held_percent_insiders: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub held_percent_institutions: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub short_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub short_percent_of_float: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub beta: Option<f64>,
     pub implied_shares_outstanding: Option<u64>,
     pub category: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub book_value: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub price_to_book: Option<f64>,
     pub fund_family: Option<String>,
     pub fund_inception_date: Option<u32>,
@@ -763,23 +942,38 @@ pub struct DefaultKeyStatistics {
     pub last_fiscal_year_end: Option<i64>,
     pub next_fiscal_year_end: Option<i64>,
     pub most_recent_quarter: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_quarterly_growth: Option<f64>,
     pub net_income_to_common: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub trailing_eps: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub forward_eps: Option<f64>,
     pub last_split_factor: Option<String>,
     pub last_split_date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub enterprise_to_revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub enterprise_to_ebitda: Option<f64>,
-    #[serde(rename = "52WeekChange")]
+    #[serde(
+        rename = "52WeekChange",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub fifty_two_week_change: Option<f64>,
-    #[serde(rename = "SandP52WeekChange")]
+    #[serde(
+        rename = "SandP52WeekChange",
+        default,
+        deserialize_with = "deserialize_f64_special"
+    )]
     pub sand_p_fifty_two_week_change: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub last_dividend_value: Option<f64>,
     pub last_dividend_date: Option<i64>,
     pub latest_share_class: Option<String>,
     pub lead_investor: Option<String>,
     #[serde(rename = "yield")]
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub _yield: Option<f64>,
 }
 
@@ -807,41 +1001,618 @@ pub struct QuoteType {
 #[serde(rename_all = "camelCase")]
 pub struct FinancialData {
     pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_high_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_low_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_mean_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub target_median_price: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub recommendation_mean: Option<f64>,
     pub recommendation_key: Option<String>,
     pub number_of_analyst_opinions: Option<u64>,
-    /// Cash can be negative on the balance sheet, hence `i64` (Yahoo returns
-    /// negative integers for some tickers, e.g. GLABF: -613).
-    pub total_cash: Option<i64>,
+    /// Cash can be negative on the balance sheet (Yahoo returns negative
+    /// integers for some tickers, e.g. GLABF: -613), hence `f64`.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub total_cash: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub total_cash_per_share: Option<f64>,
     pub ebitda: Option<i64>,
-    /// Debt can be negative on the balance sheet, hence `i64`.
-    pub total_debt: Option<i64>,
+    /// Debt can be negative on the balance sheet, hence `f64`.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub total_debt: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub quick_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub current_ratio: Option<f64>,
     pub total_revenue: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub debt_to_equity: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_per_share: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub return_on_assets: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub return_on_equity: Option<f64>,
     pub gross_profits: Option<i64>,
     pub free_cashflow: Option<i64>,
     pub operating_cashflow: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub earnings_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub revenue_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub gross_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub ebitda_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub operating_margins: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
     pub profit_margins: Option<f64>,
     pub financial_currency: Option<String>,
 }
 
-// Структуры для earnings dates response
+/// A numeric value with Yahoo's formatted string variants (`{raw, fmt, longFmt}`).
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawValue {
+    /// `raw` may arrive as `"Infinity"`/`"NaN"` strings or `null`; tolerate
+    /// them instead of failing the whole quoteSummary response.
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub raw: Option<f64>,
+    pub fmt: Option<String>,
+    pub long_fmt: Option<String>,
+}
+
+/// `recommendationTrend` module: analyst recommendation counts over the last months.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendationTrend {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub trend: Vec<RecommendationTrendItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendationTrendItem {
+    pub period: Option<String>,
+    pub strong_buy: Option<i64>,
+    pub buy: Option<i64>,
+    pub hold: Option<i64>,
+    pub sell: Option<i64>,
+    pub strong_sell: Option<i64>,
+}
+
+/// `earningsTrend` module: analyst estimates (earnings, revenue, growth) per period.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsTrend {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub trend: Vec<EarningsTrendItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsTrendItem {
+    pub max_age: Option<i64>,
+    pub period: Option<String>,
+    /// Period end date as a plain string (e.g. "2026-09-30"), not a timestamp.
+    pub end_date: Option<String>,
+    pub growth: Option<RawValue>,
+    pub earnings_estimate: Option<EarningsEstimate>,
+    pub revenue_estimate: Option<RevenueEstimate>,
+    pub eps_trend: Option<EpsTrend>,
+    pub eps_revisions: Option<EpsRevisions>,
+    pub growth_estimate: Option<GrowthEstimate>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsEstimate {
+    pub avg: Option<RawValue>,
+    pub low: Option<RawValue>,
+    pub high: Option<RawValue>,
+    pub year_ago_eps: Option<RawValue>,
+    pub number_of_analysts: Option<RawValue>,
+    pub growth: Option<RawValue>,
+    pub earnings_currency: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevenueEstimate {
+    pub avg: Option<RawValue>,
+    pub low: Option<RawValue>,
+    pub high: Option<RawValue>,
+    pub number_of_analysts: Option<RawValue>,
+    pub year_ago_revenue: Option<RawValue>,
+    pub growth: Option<RawValue>,
+    pub revenue_currency: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EpsTrend {
+    pub current: Option<RawValue>,
+    #[serde(rename = "7daysAgo")]
+    pub seven_days_ago: Option<RawValue>,
+    #[serde(rename = "30daysAgo")]
+    pub thirty_days_ago: Option<RawValue>,
+    #[serde(rename = "60daysAgo")]
+    pub sixty_days_ago: Option<RawValue>,
+    #[serde(rename = "90daysAgo")]
+    pub ninety_days_ago: Option<RawValue>,
+    pub eps_trend_currency: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EpsRevisions {
+    pub up_last_7days: Option<RawValue>,
+    pub up_last_30days: Option<RawValue>,
+    pub down_last_30days: Option<RawValue>,
+    #[serde(rename = "downLast7Days")]
+    pub down_last7_days: Option<RawValue>,
+    pub down_last_90days: Option<RawValue>,
+    pub eps_revisions_currency: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrowthEstimate {
+    pub avg: Option<RawValue>,
+    pub low: Option<RawValue>,
+    pub high: Option<RawValue>,
+    pub year_ago_eps: Option<RawValue>,
+    pub number_of_analysts: Option<RawValue>,
+    pub growth: Option<RawValue>,
+    pub earnings_currency: Option<String>,
+}
+
+/// `earningsHistory` module: actual vs estimated EPS per past quarter.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsHistory {
+    pub max_age: Option<i64>,
+    pub default_methodology: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub history: Vec<EarningsHistoryItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsHistoryItem {
+    pub max_age: Option<i64>,
+    pub eps_actual: Option<RawValue>,
+    pub eps_estimate: Option<RawValue>,
+    pub eps_difference: Option<RawValue>,
+    pub surprise_percent: Option<RawValue>,
+    pub quarter: Option<RawValue>,
+    pub currency: Option<String>,
+    pub period: Option<String>,
+}
+
+/// `earnings` module: earnings charts and current quarter estimates.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Earnings {
+    pub max_age: Option<i64>,
+    pub earnings_chart: Option<EarningsChart>,
+    pub financials_chart: Option<FinancialsChart>,
+    pub financial_currency: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsChart {
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub quarterly: Vec<EarningsChartQuarterly>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub current_quarter_estimate: Option<f64>,
+    pub current_quarter_estimate_date: Option<String>,
+    pub current_calendar_quarter: Option<String>,
+    pub current_quarter_estimate_year: Option<i64>,
+    pub current_fiscal_quarter: Option<String>,
+    pub current_period_end_date: Option<i64>,
+    /// Unix timestamps of the upcoming earnings dates.
+    pub earnings_date: Option<Vec<i64>>,
+    pub is_earnings_date_estimate: Option<bool>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EarningsChartQuarterly {
+    pub date: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub actual: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub estimate: Option<f64>,
+    pub fiscal_quarter: Option<String>,
+    pub calendar_quarter: Option<String>,
+    /// Difference between actual and estimate, as a string (e.g. "0.08").
+    pub difference: Option<String>,
+    /// Surprise percentage, as a string (e.g. "4.52").
+    pub surprise_pct: Option<String>,
+    pub period_end_date: Option<i64>,
+    pub reported_date: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinancialsChart {
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub yearly: Vec<FinancialsChartYearly>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub quarterly: Vec<FinancialsChartQuarterly>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinancialsChartYearly {
+    /// Year as an integer (e.g. 2022), unlike the quarterly chart where the
+    /// date is a string such as "2Q2025".
+    pub date: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub profit_margin: Option<f64>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinancialsChartQuarterly {
+    pub date: Option<String>,
+    pub fiscal_quarter: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub revenue: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub profit_margin: Option<f64>,
+}
+
+/// `upgradeDowngradeHistory` module: analyst rating changes.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeDowngradeHistory {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub history: Vec<UpgradeDowngradeItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeDowngradeItem {
+    /// Unix timestamp of the rating change.
+    pub epoch_grade_date: Option<i64>,
+    pub firm: Option<String>,
+    pub to_grade: Option<String>,
+    pub from_grade: Option<String>,
+    pub action: Option<String>,
+    pub price_target_action: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub current_price_target: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub prior_price_target: Option<f64>,
+}
+
+/// `calendarEvents` module: upcoming earnings, dividend and ex-dividend dates.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEvents {
+    pub max_age: Option<i64>,
+    pub earnings: Option<CalendarEarnings>,
+    /// Unix timestamp of the ex-dividend date (absent for non-dividend tickers).
+    pub ex_dividend_date: Option<i64>,
+    /// Unix timestamp of the dividend payment date.
+    pub dividend_date: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEarnings {
+    /// Unix timestamps of the upcoming earnings dates.
+    pub earnings_date: Option<Vec<i64>>,
+    /// Unix timestamps of the upcoming earnings call dates.
+    pub earnings_call_date: Option<Vec<i64>>,
+    pub is_earnings_date_estimate: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub earnings_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub earnings_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub earnings_high: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub revenue_average: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub revenue_low: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub revenue_high: Option<f64>,
+}
+
+/// `insiderHolders` module: insider position details.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsiderHolders {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub holders: Vec<InsiderHolder>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsiderHolder {
+    pub max_age: Option<i64>,
+    pub name: Option<String>,
+    pub relation: Option<String>,
+    pub url: Option<String>,
+    pub transaction_description: Option<String>,
+    pub latest_trans_date: Option<RawValue>,
+    pub position_direct: Option<RawValue>,
+    pub position_direct_date: Option<RawValue>,
+    pub position_indirect: Option<RawValue>,
+    pub position_indirect_date: Option<RawValue>,
+    pub shares: Option<RawValue>,
+    pub value: Option<RawValue>,
+}
+
+/// `insiderTransactions` module: recent insider share transactions.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsiderTransactions {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub transactions: Vec<InsiderTransaction>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsiderTransaction {
+    pub max_age: Option<i64>,
+    pub shares: Option<RawValue>,
+    pub value: Option<RawValue>,
+    pub filer_url: Option<String>,
+    pub transaction_text: Option<String>,
+    pub filer_name: Option<String>,
+    pub filer_relation: Option<String>,
+    pub money_text: Option<String>,
+    pub start_date: Option<RawValue>,
+    pub ownership: Option<String>,
+}
+
+/// `majorHoldersBreakdown` module: aggregate insider/institution ownership percentages.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MajorHoldersBreakdown {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub insiders_percent_held: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub institutions_percent_held: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub institutions_float_percent_held: Option<f64>,
+    pub institutions_count: Option<i64>,
+}
+
+/// `institutionOwnership` module: top institutional holders.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstitutionOwnership {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub ownership_list: Vec<InstitutionOwnershipItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstitutionOwnershipItem {
+    pub max_age: Option<i64>,
+    pub report_date: Option<RawValue>,
+    pub organization: Option<String>,
+    pub pct_held: Option<RawValue>,
+    pub position: Option<RawValue>,
+    pub value: Option<RawValue>,
+    pub pct_change: Option<RawValue>,
+}
+
+/// `fundOwnership` module: top mutual fund holders.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundOwnership {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub ownership_list: Vec<FundOwnershipItem>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundOwnershipItem {
+    pub max_age: Option<i64>,
+    pub report_date: Option<RawValue>,
+    pub organization: Option<String>,
+    pub pct_held: Option<RawValue>,
+    pub position: Option<RawValue>,
+    pub value: Option<RawValue>,
+    pub pct_change: Option<RawValue>,
+}
+
+/// `netSharePurchaseActivity` module: aggregate insider buying/selling activity.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetSharePurchaseActivity {
+    pub max_age: Option<i64>,
+    pub period: Option<String>,
+    pub buy_info_count: Option<i64>,
+    pub buy_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub buy_percent_insider_shares: Option<f64>,
+    pub sell_info_count: Option<i64>,
+    pub sell_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub sell_percent_insider_shares: Option<f64>,
+    pub net_info_count: Option<i64>,
+    pub net_info_shares: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub net_percent_insider_shares: Option<f64>,
+    pub net_inst_shares_buying: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub net_inst_buying_percent: Option<f64>,
+    pub total_insider_shares: Option<i64>,
+}
+
+/// `fundProfile` module: fund metadata (management, fees, category).
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundProfile {
+    pub max_age: Option<i64>,
+    pub style_box_url: Option<String>,
+    pub family: Option<String>,
+    pub category_name: Option<String>,
+    pub legal_type: Option<String>,
+    pub management_info: Option<FundManagementInfo>,
+    pub fees_expenses_investment: Option<FundFeesExpenses>,
+    pub fees_expenses_investment_cat: Option<FundFeesExpenses>,
+    pub brokerages: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundManagementInfo {
+    pub manager_name: Option<String>,
+    pub manager_bio: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundFeesExpenses {
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub annual_report_expense_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub annual_holdings_turnover: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub total_net_assets: Option<f64>,
+    pub projection_values: Option<RawValue>,
+}
+
+/// `topHoldings` module: fund's top holdings and asset allocation.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopHoldings {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub cash_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub stock_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub bond_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub other_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub preferred_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub convertible_position: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub holdings: Vec<TopHolding>,
+    pub equity_holdings: Option<FundValuation>,
+    pub bond_holdings: Option<FundValuation>,
+    /// Bond rating weights keyed by rating name (e.g. "us_government"); empty
+    /// for equity funds.
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub bond_ratings: Vec<HashMap<String, f64>>,
+    /// Sector weights keyed by sector name (e.g. "technology", "realestate").
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub sector_weightings: Vec<HashMap<String, f64>>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopHolding {
+    pub symbol: Option<String>,
+    pub holding_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub holding_percent: Option<f64>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FundValuation {
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_earnings: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_book: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_sales: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_cashflow: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub median_market_cap: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub three_year_earnings_growth: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_earnings_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_book_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_sales_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub price_to_cashflow_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub median_market_cap_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub three_year_earnings_growth_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub duration: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub maturity: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub credit_quality: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub duration_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub maturity_cat: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_special")]
+    pub credit_quality_cat: Option<f64>,
+}
+
+/// `secFilings` module: SEC filings list.
+#[derive(Deserialize, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecFilings {
+    pub max_age: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
+    pub filings: Vec<SecFiling>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecFiling {
+    pub date: Option<String>,
+    pub epoch_date: Option<i64>,
+    #[serde(rename = "type")]
+    pub filing_type: Option<String>,
+    pub title: Option<String>,
+    pub edgar_url: Option<String>,
+    pub exhibits: Option<Vec<SecFilingExhibit>>,
+    pub max_age: Option<i64>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecFilingExhibit {
+    #[serde(rename = "type")]
+    pub exhibit_type: Option<String>,
+    pub url: Option<String>,
+}
+
+// Structs for the earnings dates response
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsResponse {
     pub finance: YEarningsFinance,
@@ -849,26 +1620,33 @@ pub struct YEarningsResponse {
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsFinance {
+    #[serde(default, deserialize_with = "deserialize_nullable_vec")]
     pub result: Vec<YEarningsResult>,
     pub error: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsResult {
+    #[serde(default)]
     pub documents: Vec<YEarningsDocument>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsDocument {
+    #[serde(default)]
     pub columns: Vec<YEarningsColumn>,
+    #[serde(default)]
     pub rows: Vec<Vec<serde_json::Value>>,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct YEarningsColumn {
-    pub label: String,
+    pub label: Option<String>,
 }
 
+/// A financial event (earnings, meeting or call) returned by
+/// [`crate::YahooConnector::get_financial_events`]. `event_type` is mapped
+/// from the raw API codes: "1" -> Call, "2" -> Earnings, "11" -> Meeting.
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FinancialEvent {
@@ -1086,6 +1864,233 @@ mod tests {
     }
 
     #[test]
+    fn test_summary_detail_tolerates_infinity() {
+        // Yahoo occasionally returns "Infinity"/"NaN" strings in price fields.
+        let json = r#"{
+            "previousClose": "Infinity",
+            "open": "NaN",
+            "beta": "-Infinity",
+            "bid": 12.5
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.previous_close, Some(f64::INFINITY));
+        assert!(sd.open.unwrap().is_nan());
+        assert_eq!(sd.beta, Some(f64::NEG_INFINITY));
+        assert_eq!(sd.bid, Some(12.5));
+    }
+
+    #[test]
+    fn test_financial_data_tolerates_infinity() {
+        let json = r#"{
+            "profitMargins": "Infinity",
+            "currentPrice": "NaN",
+            "targetHighPrice": 220.0
+        }"#;
+        let fd: FinancialData = serde_json::from_str(json).unwrap();
+        assert_eq!(fd.profit_margins, Some(f64::INFINITY));
+        assert!(fd.current_price.unwrap().is_nan());
+        assert_eq!(fd.target_high_price, Some(220.0));
+    }
+
+    #[test]
+    fn test_raw_value_tolerates_infinity_and_null() {
+        // `RawValue.raw` backs dozens of fields (pctHeld, position, value, ...);
+        // a single "Infinity" string must not fail the whole quoteSummary.
+        let json = r#"{
+            "raw": "Infinity",
+            "fmt": "Inf"
+        }"#;
+        let rv: RawValue = serde_json::from_str(json).unwrap();
+        assert_eq!(rv.raw, Some(f64::INFINITY));
+        assert_eq!(rv.fmt.as_deref(), Some("Inf"));
+
+        let json = r#"{
+            "raw": null
+        }"#;
+        let rv: RawValue = serde_json::from_str(json).unwrap();
+        assert_eq!(rv.raw, None);
+    }
+
+    #[test]
+    fn test_f64_special_tolerates_plus_infinity_and_placeholder() {
+        // "+Infinity" is accepted by the chart seq deserializer but not by
+        // deserialize_f64_special; a single occurrence must not fail the whole
+        // quoteSummary. Unknown placeholder strings ("N/A", "--") fall back to
+        // None like json_value_to_decimal.
+        let json = r#"{
+            "trailingPE": "+Infinity",
+            "bid": "N/A",
+            "ask": "--",
+            "regularMarketOpen": ""
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.trailing_pe, Some(f64::INFINITY));
+        assert_eq!(sd.bid, None);
+        assert_eq!(sd.ask, None);
+        assert_eq!(sd.regular_market_open, None);
+    }
+
+    #[test]
+    fn test_f64_special_parses_numeric_strings() {
+        // Yahoo sometimes sends numbers as strings ("-0.05", "3500000000000");
+        // they must be parsed, not silently dropped to None.
+        let json = r#"{
+            "52WeekChange": "-0.05",
+            "beta": "N/A"
+        }"#;
+        let sd: DefaultKeyStatistics = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.fifty_two_week_change, Some(-0.05));
+        assert_eq!(sd.beta, None);
+    }
+
+    #[test]
+    fn test_f64_special_unwraps_raw_dict() {
+        // topHoldings/fundProfile values can arrive as `{"raw": ..., "fmt": ...}`
+        // dicts even with formatted=false (yfinance's _parse_raw_values handles
+        // both shapes); a dict without raw -> None.
+        let json = r#"{
+            "priceToEarnings": {"raw": 18.0, "fmt": "18.00"},
+            "priceToBook": {"raw": 4.2},
+            "priceToSales": {"foo": 1}
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(18.0));
+        assert_eq!(fv.price_to_book, Some(4.2));
+        assert_eq!(fv.price_to_sales, None);
+    }
+
+    #[test]
+    fn test_f64_special_trims_whitespace_in_special_values() {
+        // "NaN " / "Infinity " with surrounding whitespace must still map to
+        // their IEEE values, not be dropped by the generic string parse.
+        let json = r#"{
+            "trailingPE": "NaN ",
+            "beta": " Infinity ",
+            "bid": "12.5"
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert!(sd.trailing_pe.unwrap().is_nan());
+        assert_eq!(sd.beta, Some(f64::INFINITY));
+        assert_eq!(sd.bid, Some(12.5));
+    }
+
+    #[test]
+    fn test_nullable_vec_tolerates_empty_object() {
+        // Yahoo sometimes sends an empty object `{}` instead of an array for a
+        // sequence field; it must fall back to an empty vec, not fail.
+        let json = r#"{
+            "trend": {},
+            "maxAge": 1
+        }"#;
+        let rt: RecommendationTrend = serde_json::from_str(json).unwrap();
+        assert!(rt.trend.is_empty());
+    }
+
+    #[test]
+    fn test_earnings_column_null_label_tolerated() {
+        // A null column label must not fail the whole earnings response.
+        let json = r#"{
+            "label": null
+        }"#;
+        let col: YEarningsColumn = serde_json::from_str(json).unwrap();
+        assert!(col.label.is_none());
+    }
+
+    #[test]
+    fn test_negative_full_time_employees() {
+        // Yahoo has emitted negative employee counts; i64 tolerates them while
+        // u32 would fail the whole response.
+        let json = r#"{
+            "fullTimeEmployees": -5
+        }"#;
+        let ap: AssetProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(ap.full_time_employees, Some(-5));
+    }
+
+    #[test]
+    fn test_summary_detail_all_time_and_non_diluted_fields() {
+        // allTimeHigh/allTimeLow/nonDilutedMarketCap appear in real AAPL
+        // responses and were previously silently dropped.
+        let json = r#"{
+            "allTimeHigh": 234.5,
+            "allTimeLow": 3.2,
+            "nonDilutedMarketCap": 3500000000000
+        }"#;
+        let sd: SummaryDetail = serde_json::from_str(json).unwrap();
+        assert_eq!(sd.all_time_high, Some(234.5));
+        assert_eq!(sd.all_time_low, Some(3.2));
+        assert_eq!(sd.non_diluted_market_cap, Some(3.5e12));
+    }
+
+    #[test]
+    fn test_fund_valuation_category_and_bond_fields() {
+        // yfinance reads these extra FundValuation fields (funds.py); they were
+        // previously silently dropped.
+        let json = r#"{
+            "priceToEarnings": 18.0,
+            "medianMarketCap": 50000000000,
+            "priceToEarningsCat": 20.0,
+            "threeYearEarningsGrowthCat": "Infinity",
+            "duration": 5.5,
+            "creditQualityCat": "Infinity"
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(18.0));
+        assert_eq!(fv.median_market_cap, Some(5e10));
+        assert_eq!(fv.price_to_earnings_cat, Some(20.0));
+        assert_eq!(fv.three_year_earnings_growth_cat, Some(f64::INFINITY));
+        assert_eq!(fv.duration, Some(5.5));
+        assert_eq!(fv.credit_quality_cat, Some(f64::INFINITY));
+    }
+
+    #[test]
+    fn test_company_officer_null_name_title() {
+        // Yahoo may return `null` for an officer's name/title; tolerate it.
+        let json = r#"{
+            "name": null,
+            "title": null,
+            "age": 55
+        }"#;
+        let officer: CompanyOfficer = serde_json::from_str(json).unwrap();
+        assert!(officer.name.is_none());
+        assert!(officer.title.is_none());
+        assert_eq!(officer.age, Some(55));
+    }
+
+    #[test]
+    fn test_quote_list_missing_volume() {
+        // Exotic instruments (indices/futures) may omit the volume key entirely.
+        let json = r#"{
+            "open": [1.0],
+            "high": [2.0],
+            "low": [0.5],
+            "close": [1.5]
+        }"#;
+        let ql: QuoteList = serde_json::from_str(json).unwrap();
+        assert!(ql.volume.is_none());
+        assert_eq!(ql.open.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_top_holdings_and_valuation_tolerate_infinity() {
+        let json = r#"{
+            "cashPosition": "Infinity",
+            "stockPosition": 50.0
+        }"#;
+        let th: TopHoldings = serde_json::from_str(json).unwrap();
+        assert_eq!(th.cash_position, Some(f64::INFINITY));
+        assert_eq!(th.stock_position, Some(50.0));
+
+        let json = r#"{
+            "priceToEarnings": "Infinity",
+            "priceToBook": 4.2
+        }"#;
+        let fv: FundValuation = serde_json::from_str(json).unwrap();
+        assert_eq!(fv.price_to_earnings, Some(f64::INFINITY));
+        assert_eq!(fv.price_to_book, Some(4.2));
+    }
+
+    #[test]
     fn test_deserialize_chart_with_infinity_bars() {
         // Real-world case: PADEF returns "-Infinity" strings in adjclose,
         // which previously failed the whole YResponse deserialization.
@@ -1214,8 +2219,43 @@ mod tests {
             .unwrap()
             .financial_data
             .unwrap();
-        assert_eq!(financial.total_cash, Some(-613));
-        assert_eq!(financial.total_debt, Some(-45822));
+        assert_eq!(financial.total_cash, Some(-613.0));
+        assert_eq!(financial.total_debt, Some(-45822.0));
+    }
+
+    #[test]
+    fn test_deserialize_total_cash_as_float_and_placeholder() {
+        // totalCash/totalDebt may arrive as floats or placeholder strings; the
+        // tolerant f64 deserializer must not fail the whole quoteSummary.
+        let json = r#"
+        {
+          "quoteSummary": {
+            "result": [
+              {
+                "financialData": {
+                  "totalCash": 123.9,
+                  "totalDebt": "N/A",
+                  "ebitda": 42
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        "#;
+        let summary: YQuoteSummary = serde_json::from_str(json).unwrap();
+        let financial = summary
+            .quote_summary
+            .unwrap()
+            .result
+            .unwrap()
+            .pop()
+            .unwrap()
+            .financial_data
+            .unwrap();
+        assert_eq!(financial.total_cash, Some(123.9));
+        assert_eq!(financial.total_debt, None);
+        assert_eq!(financial.ebitda, Some(42));
     }
 
     #[test]
@@ -1347,5 +2387,1048 @@ mod tests {
   }
 }"#;
         assert_eq!(s, expected);
+    }
+
+    #[test]
+    fn test_deserialize_recommendation_trend() {
+        let json = r#"
+        {
+            "maxAge": 86400,
+            "trend": [
+                {"period": "0m", "strongBuy": 6, "buy": 21, "hold": 15, "sell": 2, "strongSell": 2},
+                {"period": "-1m", "strongBuy": 6, "buy": 22, "hold": 14, "sell": 2, "strongSell": 2}
+            ]
+        }
+        "#;
+        let trend: RecommendationTrend = serde_json::from_str(json).unwrap();
+        assert_eq!(trend.trend.len(), 2);
+        assert_eq!(trend.trend[0].period.as_deref(), Some("0m"));
+        assert_eq!(trend.trend[0].strong_buy, Some(6));
+        assert_eq!(trend.trend[0].strong_sell, Some(2));
+        assert_eq!(trend.trend[1].hold, Some(14));
+    }
+
+    #[test]
+    fn test_deserialize_earnings_trend() {
+        let json = r#"
+        {
+            "maxAge": 86400,
+            "trend": [
+                {
+                    "maxAge": 1,
+                    "period": "0q",
+                    "endDate": "2026-09-30",
+                    "growth": {"raw": 0.0683, "fmt": "6.83%"},
+                    "earningsEstimate": {
+                        "avg": {"raw": 1.97549, "fmt": "1.98"},
+                        "low": {"raw": 1.93, "fmt": "1.93"},
+                        "high": {"raw": 2.04, "fmt": "2.04"},
+                        "yearAgoEps": {"raw": 1.85, "fmt": "1.85"},
+                        "numberOfAnalysts": {"raw": 28, "fmt": "28", "longFmt": "28"},
+                        "growth": {"raw": 0.0678, "fmt": "6.78%"},
+                        "earningsCurrency": "USD"
+                    },
+                    "revenueEstimate": {
+                        "avg": {"raw": 113256580210, "fmt": "113.26B"},
+                        "numberOfAnalysts": {"raw": 26, "fmt": "26"},
+                        "yearAgoRevenue": {"raw": 102466000000, "fmt": "102.47B"},
+                        "growth": {"raw": 0.1053, "fmt": "10.53%"},
+                        "revenueCurrency": "USD"
+                    },
+                    "epsTrend": {
+                        "current": {"raw": 1.97549, "fmt": "1.98"},
+                        "7daysAgo": {"raw": 2.01204, "fmt": "2.01"},
+                        "30daysAgo": {"raw": 2.00836, "fmt": "2.01"},
+                        "60daysAgo": {"raw": 2.00767, "fmt": "2.01"},
+                        "90daysAgo": {"raw": 2.00379, "fmt": "2"},
+                        "epsTrendCurrency": "USD"
+                    },
+                    "epsRevisions": {
+                        "upLast7days": {"raw": 1, "fmt": "1"},
+                        "upLast30days": {"raw": 4, "fmt": "4"},
+                        "downLast30days": {"raw": 2, "fmt": "2"},
+                        "downLast7Days": {"raw": 1, "fmt": "1"},
+                        "downLast90days": {},
+                        "epsRevisionsCurrency": "USD"
+                    },
+                    "growthEstimate": null
+                }
+            ]
+        }
+        "#;
+        let et: EarningsTrend = serde_json::from_str(json).unwrap();
+        let item = &et.trend[0];
+        assert_eq!(item.end_date.as_deref(), Some("2026-09-30"));
+        assert_eq!(item.growth.as_ref().unwrap().raw, Some(0.0683));
+        let ee = item.earnings_estimate.as_ref().unwrap();
+        assert_eq!(ee.avg.as_ref().unwrap().raw, Some(1.97549));
+        assert_eq!(ee.number_of_analysts.as_ref().unwrap().raw, Some(28.0));
+        let eps_trend = item.eps_trend.as_ref().unwrap();
+        assert_eq!(
+            eps_trend.seven_days_ago.as_ref().unwrap().raw,
+            Some(2.01204)
+        );
+        assert_eq!(
+            eps_trend.thirty_days_ago.as_ref().unwrap().raw,
+            Some(2.00836)
+        );
+        assert_eq!(
+            eps_trend.sixty_days_ago.as_ref().unwrap().raw,
+            Some(2.00767)
+        );
+        assert_eq!(
+            eps_trend.ninety_days_ago.as_ref().unwrap().raw,
+            Some(2.00379)
+        );
+        let eps_rev = item.eps_revisions.as_ref().unwrap();
+        assert_eq!(eps_rev.up_last_7days.as_ref().unwrap().raw, Some(1.0));
+        assert_eq!(eps_rev.down_last7_days.as_ref().unwrap().raw, Some(1.0));
+        assert!(eps_rev.down_last_90days.as_ref().unwrap().raw.is_none());
+        assert!(item.growth_estimate.is_none());
+    }
+
+    #[test]
+    fn test_deserialize_earnings_history() {
+        let json = r#"
+        {
+            "history": [
+                {
+                    "maxAge": 1,
+                    "epsActual": {"raw": 1.85, "fmt": "1.85"},
+                    "epsEstimate": {"raw": 1.76993, "fmt": "1.77"},
+                    "epsDifference": {"raw": 0.08, "fmt": "0.08"},
+                    "surprisePercent": {"raw": 0.0452, "fmt": "4.52%"},
+                    "quarter": {"raw": 1759190400, "fmt": "2025-09-30"},
+                    "currency": "USD",
+                    "period": "-4q"
+                }
+            ],
+            "defaultMethodology": "gaap",
+            "maxAge": 86400
+        }
+        "#;
+        let eh: EarningsHistory = serde_json::from_str(json).unwrap();
+        let item = &eh.history[0];
+        assert_eq!(item.eps_actual.as_ref().unwrap().raw, Some(1.85));
+        assert_eq!(item.surprise_percent.as_ref().unwrap().raw, Some(0.0452));
+        assert_eq!(item.quarter.as_ref().unwrap().raw, Some(1759190400.0));
+        assert_eq!(item.period.as_deref(), Some("-4q"));
+        assert_eq!(eh.default_methodology.as_deref(), Some("gaap"));
+    }
+
+    #[test]
+    fn test_deserialize_earnings() {
+        let json = r#"
+        {
+            "maxAge": 86400,
+            "earningsChart": {
+                "quarterly": [
+                    {
+                        "date": "3Q2025",
+                        "actual": 1.85,
+                        "estimate": 1.76993,
+                        "fiscalQuarter": "4Q2025",
+                        "calendarQuarter": "3Q2025",
+                        "difference": "0.08",
+                        "surprisePct": "4.52",
+                        "periodEndDate": 1759190400,
+                        "reportedDate": 1761856200
+                    }
+                ],
+                "currentQuarterEstimate": 1.97549,
+                "currentQuarterEstimateDate": "3Q",
+                "currentCalendarQuarter": "3Q2026",
+                "currentQuarterEstimateYear": 2026,
+                "currentFiscalQuarter": "4Q2026",
+                "currentPeriodEndDate": 1790726400,
+                "earningsDate": [1793304000],
+                "isEarningsDateEstimate": true
+            },
+            "financialsChart": {
+                "yearly": [
+                    {"date": 2022, "revenue": 394328000000, "earnings": 99803000000, "profitMargin": 0.2530964}
+                ],
+                "quarterly": [
+                    {"date": "2Q2025", "fiscalQuarter": "3Q2025", "revenue": 94036000000, "earnings": 23434000000, "profitMargin": 0.24920243}
+                ]
+            },
+            "financialCurrency": "USD"
+        }
+        "#;
+        let e: Earnings = serde_json::from_str(json).unwrap();
+        let chart = e.earnings_chart.as_ref().unwrap();
+        assert_eq!(chart.quarterly[0].date.as_deref(), Some("3Q2025"));
+        assert_eq!(chart.quarterly[0].difference.as_deref(), Some("0.08"));
+        assert_eq!(chart.quarterly[0].actual, Some(1.85));
+        assert_eq!(chart.current_quarter_estimate, Some(1.97549));
+        assert_eq!(chart.earnings_date.as_ref().unwrap(), &vec![1793304000]);
+        let fin = e.financials_chart.as_ref().unwrap();
+        assert_eq!(fin.yearly[0].date, Some(2022));
+        assert_eq!(fin.yearly[0].revenue, Some(394328000000.0));
+        assert_eq!(fin.quarterly[0].date.as_deref(), Some("2Q2025"));
+    }
+
+    #[test]
+    fn test_deserialize_upgrade_downgrade_history() {
+        let json = r#"
+        {
+            "history": [
+                {
+                    "epochGradeDate": 1786365485,
+                    "firm": "Jefferies",
+                    "toGrade": "Underperform",
+                    "fromGrade": "Hold",
+                    "action": "down",
+                    "priceTargetAction": "Lowers",
+                    "currentPriceTarget": 263.66,
+                    "priorPriceTarget": 285.56
+                }
+            ],
+            "maxAge": 86400
+        }
+        "#;
+        let udh: UpgradeDowngradeHistory = serde_json::from_str(json).unwrap();
+        let item = &udh.history[0];
+        assert_eq!(item.firm.as_deref(), Some("Jefferies"));
+        assert_eq!(item.to_grade.as_deref(), Some("Underperform"));
+        assert_eq!(item.action.as_deref(), Some("down"));
+        assert_eq!(item.current_price_target, Some(263.66));
+    }
+
+    #[test]
+    fn test_deserialize_calendar_events() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "earnings": {
+                "earningsDate": [1793304000],
+                "earningsCallDate": [1785441600],
+                "isEarningsDateEstimate": true,
+                "earningsAverage": 1.97643,
+                "earningsLow": 1.93,
+                "earningsHigh": 2.04,
+                "revenueAverage": 113256580210,
+                "revenueLow": 112137000000,
+                "revenueHigh": 115068279000
+            },
+            "exDividendDate": 1786320000,
+            "dividendDate": 1786579200
+        }
+        "#;
+        let ce: CalendarEvents = serde_json::from_str(json).unwrap();
+        let er = ce.earnings.as_ref().unwrap();
+        assert_eq!(er.earnings_date.as_ref().unwrap(), &vec![1793304000]);
+        assert_eq!(er.earnings_high, Some(2.04));
+        assert_eq!(er.revenue_low, Some(112137000000.0));
+        assert_eq!(ce.ex_dividend_date, Some(1786320000));
+        assert_eq!(ce.dividend_date, Some(1786579200));
+    }
+
+    #[test]
+    fn test_deserialize_insider_holders() {
+        let json = r#"
+        {
+            "holders": [
+                {
+                    "maxAge": 1,
+                    "name": "COOK TIMOTHY D",
+                    "relation": "Chief Executive Officer",
+                    "url": "",
+                    "transactionDescription": "Sale",
+                    "latestTransDate": {"raw": 1775088000, "fmt": "2026-04-02"},
+                    "positionDirect": {"raw": 3280420, "fmt": "3.28M", "longFmt": "3,280,420"},
+                    "positionDirectDate": {"raw": 1775088000, "fmt": "2026-04-02"}
+                }
+            ],
+            "maxAge": 1
+        }
+        "#;
+        let ih: InsiderHolders = serde_json::from_str(json).unwrap();
+        let h = &ih.holders[0];
+        assert_eq!(h.name.as_deref(), Some("COOK TIMOTHY D"));
+        assert_eq!(h.relation.as_deref(), Some("Chief Executive Officer"));
+        assert_eq!(h.position_direct.as_ref().unwrap().raw, Some(3280420.0));
+        assert_eq!(
+            h.position_direct.as_ref().unwrap().long_fmt.as_deref(),
+            Some("3,280,420")
+        );
+        assert!(h.position_indirect.is_none());
+    }
+
+    #[test]
+    fn test_deserialize_insider_transactions() {
+        let json = r#"
+        {
+            "transactions": [
+                {
+                    "maxAge": 1,
+                    "shares": {"raw": 116, "fmt": "116", "longFmt": "116"},
+                    "value": {"raw": 34236, "fmt": "34.24k", "longFmt": "34,236"},
+                    "filerUrl": "",
+                    "transactionText": "Sale at price 295.14 per share.",
+                    "filerName": "BORDERS BEN",
+                    "filerRelation": "Officer",
+                    "moneyText": "",
+                    "startDate": {"raw": 1781568000, "fmt": "2026-06-16"},
+                    "ownership": "D"
+                },
+                {
+                    "maxAge": 1,
+                    "shares": {"raw": 30104, "fmt": "30.1k", "longFmt": "30,104"},
+                    "filerUrl": "",
+                    "transactionText": "",
+                    "filerName": "NEWSTEAD JENNIFER",
+                    "filerRelation": "General Counsel",
+                    "startDate": {"raw": 1781481600, "fmt": "2026-06-15"}
+                }
+            ],
+            "maxAge": 1
+        }
+        "#;
+        let it: InsiderTransactions = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            it.transactions[0].filer_name.as_deref(),
+            Some("BORDERS BEN")
+        );
+        assert_eq!(
+            it.transactions[0].value.as_ref().unwrap().raw,
+            Some(34236.0)
+        );
+        assert_eq!(it.transactions[0].ownership.as_deref(), Some("D"));
+        assert!(it.transactions[1].value.is_none());
+        assert_eq!(
+            it.transactions[1].filer_relation.as_deref(),
+            Some("General Counsel")
+        );
+    }
+
+    #[test]
+    fn test_deserialize_major_holders_breakdown() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "insidersPercentHeld": 0.01647,
+            "institutionsPercentHeld": 0.66289,
+            "institutionsFloatPercentHeld": 0.67399,
+            "institutionsCount": 7670
+        }
+        "#;
+        let mhb: MajorHoldersBreakdown = serde_json::from_str(json).unwrap();
+        assert_eq!(mhb.insiders_percent_held, Some(0.01647));
+        assert_eq!(mhb.institutions_count, Some(7670));
+    }
+
+    #[test]
+    fn test_deserialize_ownership_modules() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "ownershipList": [
+                {
+                    "maxAge": 1,
+                    "reportDate": {"raw": 1782777600, "fmt": "2026-06-30"},
+                    "organization": "Blackrock Inc.",
+                    "pctHeld": {"raw": 0.0797, "fmt": "7.97%"},
+                    "position": {"raw": 1162996939, "fmt": "1.16B", "longFmt": "1,162,996,939"},
+                    "value": {"raw": 356766773028, "fmt": "356.77B", "longFmt": "356,766,773,028"},
+                    "pctChange": {"raw": 0.016, "fmt": "1.60%"}
+                }
+            ]
+        }
+        "#;
+        let inst: InstitutionOwnership = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            inst.ownership_list[0].organization.as_deref(),
+            Some("Blackrock Inc.")
+        );
+        assert_eq!(
+            inst.ownership_list[0].position.as_ref().unwrap().raw,
+            Some(1162996939.0)
+        );
+        assert_eq!(
+            inst.ownership_list[0].pct_change.as_ref().unwrap().raw,
+            Some(0.016)
+        );
+
+        let fund: FundOwnership = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            fund.ownership_list[0].organization.as_deref(),
+            Some("Blackrock Inc.")
+        );
+    }
+
+    #[test]
+    fn test_deserialize_net_share_purchase_activity() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "period": "6m",
+            "buyInfoCount": 11,
+            "buyInfoShares": 434520,
+            "buyPercentInsiderShares": 0.002,
+            "sellInfoCount": 7,
+            "sellInfoShares": 397875,
+            "sellPercentInsiderShares": 0.002,
+            "netInfoCount": 18,
+            "netInfoShares": 36645,
+            "netPercentInsiderShares": 0.0,
+            "netInstSharesBuying": 62874610,
+            "netInstBuyingPercent": 0.0065,
+            "totalInsiderShares": 240366144
+        }
+        "#;
+        let nsp: NetSharePurchaseActivity = serde_json::from_str(json).unwrap();
+        assert_eq!(nsp.period.as_deref(), Some("6m"));
+        assert_eq!(nsp.buy_info_count, Some(11));
+        assert_eq!(nsp.net_info_shares, Some(36645));
+        assert_eq!(nsp.buy_percent_insider_shares, Some(0.002));
+
+        // Yahoo reports percent fields as the string "Infinity" when the
+        // denominator (totalInsiderShares) is zero
+        let json = r#"
+        {
+            "buyPercentInsiderShares": "Infinity",
+            "sellPercentInsiderShares": "-Infinity",
+            "netPercentInsiderShares": "Infinity",
+            "netInstBuyingPercent": "NaN",
+            "totalInsiderShares": 0
+        }
+        "#;
+        let nsp: NetSharePurchaseActivity = serde_json::from_str(json).unwrap();
+        assert_eq!(nsp.buy_percent_insider_shares, Some(f64::INFINITY));
+        assert_eq!(nsp.sell_percent_insider_shares, Some(f64::NEG_INFINITY));
+        assert_eq!(nsp.net_percent_insider_shares, Some(f64::INFINITY));
+        assert!(nsp.net_inst_buying_percent.unwrap().is_nan());
+    }
+
+    #[test]
+    fn test_deserialize_sec_filings() {
+        let json = r#"
+        {
+            "filings": [
+                {
+                    "date": "2026-07-31",
+                    "epochDate": 1785456000,
+                    "type": "10-Q",
+                    "title": "Periodic Financial Reports",
+                    "edgarUrl": "https://finance.yahoo.com/sec-filing/AAPL/0000320193-26-000020_320193",
+                    "exhibits": [
+                        {"type": "EX-31.1", "url": "https://cdn.yahoofinance.com/prod/sec-filings/ex.htm"}
+                    ],
+                    "maxAge": 1
+                }
+            ],
+            "maxAge": 86400
+        }
+        "#;
+        let sf: SecFilings = serde_json::from_str(json).unwrap();
+        let filing = &sf.filings[0];
+        assert_eq!(filing.filing_type.as_deref(), Some("10-Q"));
+        assert_eq!(filing.epoch_date, Some(1785456000));
+        assert_eq!(
+            filing.edgar_url.as_deref(),
+            Some("https://finance.yahoo.com/sec-filing/AAPL/0000320193-26-000020_320193")
+        );
+        let exhibits = filing.exhibits.as_ref().unwrap();
+        assert_eq!(exhibits[0].exhibit_type.as_deref(), Some("EX-31.1"));
+    }
+
+    #[test]
+    fn test_deserialize_fund_profile() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "styleBoxUrl": "https://s.yimg.com/lq/i/fi/3_0stylelargeeq2.gif",
+            "family": "Vanguard",
+            "categoryName": "Large Blend",
+            "legalType": "Exchange Traded Fund",
+            "managementInfo": {"managerName": null, "managerBio": null},
+            "feesExpensesInvestment": {
+                "annualReportExpenseRatio": 0.0003,
+                "annualHoldingsTurnover": 0.02,
+                "totalNetAssets": 486952.38,
+                "projectionValues": {}
+            },
+            "feesExpensesInvestmentCat": {
+                "annualReportExpenseRatio": 0.0004,
+                "annualHoldingsTurnover": 0.03,
+                "totalNetAssets": 500000.0
+            },
+            "brokerages": []
+        }
+        "#;
+        let fp: FundProfile = serde_json::from_str(json).unwrap();
+        assert_eq!(fp.family.as_deref(), Some("Vanguard"));
+        assert_eq!(fp.category_name.as_deref(), Some("Large Blend"));
+        let fees = fp.fees_expenses_investment.as_ref().unwrap();
+        assert_eq!(fees.annual_report_expense_ratio, Some(0.0003));
+        assert!(fees.projection_values.as_ref().unwrap().raw.is_none());
+        let fees_cat = fp.fees_expenses_investment_cat.as_ref().unwrap();
+        assert_eq!(fees_cat.annual_holdings_turnover, Some(0.03));
+    }
+
+    #[test]
+    fn test_deserialize_top_holdings() {
+        let json = r#"
+        {
+            "maxAge": 1,
+            "cashPosition": 0.0022,
+            "stockPosition": 0.9957,
+            "bondPosition": 0.0,
+            "otherPosition": 0.002,
+            "preferredPosition": 0.0,
+            "convertiblePosition": 0.0,
+            "holdings": [
+                {"symbol": "NVDA", "holdingName": "NVIDIA Corp", "holdingPercent": 0.074991}
+            ],
+            "equityHoldings": {"priceToEarnings": 29.6, "priceToBook": 9.3, "priceToSales": 8.6, "priceToCashflow": 21.0},
+            "bondHoldings": {},
+            "bondRatings": [{"us_government": 0.0}],
+            "sectorWeightings": [{"realestate": 0.0183}, {"technology": 0.334}]
+        }
+        "#;
+        let th: TopHoldings = serde_json::from_str(json).unwrap();
+        assert_eq!(th.stock_position, Some(0.9957));
+        assert_eq!(th.holdings[0].symbol.as_deref(), Some("NVDA"));
+        assert_eq!(th.holdings[0].holding_percent, Some(0.074991));
+        assert_eq!(
+            th.equity_holdings.as_ref().unwrap().price_to_earnings,
+            Some(29.6)
+        );
+        assert!(th
+            .bond_holdings
+            .as_ref()
+            .unwrap()
+            .price_to_earnings
+            .is_none());
+        assert_eq!(th.sector_weightings[1].get("technology"), Some(&0.334));
+        assert_eq!(th.bond_ratings[0].get("us_government"), Some(&0.0));
+    }
+
+    // Full-coverage tests: deserialize the real (hardcoded) API responses
+    // captured in tests/fixtures and assert every field of the new modules.
+
+    const AAPL_FIXTURE: &str = include_str!("../tests/fixtures/quote_summary_aapl.json");
+    const VOO_FIXTURE: &str = include_str!("../tests/fixtures/quote_summary_voo.json");
+
+    fn load_summary(fixture: &str) -> YSummaryData {
+        let summary: YQuoteSummary = serde_json::from_str(fixture).unwrap();
+        summary.quote_summary.unwrap().result.unwrap().remove(0)
+    }
+
+    #[test]
+    fn test_full_recommendation_trend() {
+        let s = load_summary(AAPL_FIXTURE);
+        let trend = s.recommendation_trend.unwrap();
+        assert_eq!(trend.max_age, Some(86400));
+        assert_eq!(trend.trend.len(), 4);
+        assert_eq!(trend.trend[0].period.as_deref(), Some("0m"));
+        assert_eq!(trend.trend[0].strong_buy, Some(6));
+        assert_eq!(trend.trend[0].buy, Some(21));
+        assert_eq!(trend.trend[0].hold, Some(15));
+        assert_eq!(trend.trend[0].sell, Some(2));
+        assert_eq!(trend.trend[0].strong_sell, Some(2));
+        assert_eq!(trend.trend[1].period.as_deref(), Some("-1m"));
+        assert_eq!(trend.trend[1].buy, Some(22));
+        assert_eq!(trend.trend[1].hold, Some(14));
+        assert_eq!(trend.trend[2].period.as_deref(), Some("-2m"));
+        assert_eq!(trend.trend[2].hold, Some(16));
+        assert_eq!(trend.trend[2].sell, Some(1));
+        assert_eq!(trend.trend[3].period.as_deref(), Some("-3m"));
+        assert_eq!(trend.trend[3].strong_buy, Some(7));
+        assert_eq!(trend.trend[3].buy, Some(23));
+    }
+
+    #[test]
+    fn test_full_earnings_trend() {
+        let s = load_summary(AAPL_FIXTURE);
+        let et = s.earnings_trend.unwrap();
+        assert_eq!(et.max_age, Some(1));
+        assert_eq!(et.trend.len(), 4);
+        let item = &et.trend[0];
+        assert_eq!(item.max_age, Some(1));
+        assert_eq!(item.period.as_deref(), Some("0q"));
+        assert_eq!(item.end_date.as_deref(), Some("2026-09-30"));
+        assert_eq!(item.growth.as_ref().unwrap().raw, Some(0.0683));
+        assert_eq!(item.growth.as_ref().unwrap().fmt.as_deref(), Some("6.83%"));
+        assert!(item.growth_estimate.is_none());
+
+        let ee = item.earnings_estimate.as_ref().unwrap();
+        assert_eq!(ee.avg.as_ref().unwrap().raw, Some(1.97549));
+        assert_eq!(ee.avg.as_ref().unwrap().fmt.as_deref(), Some("1.98"));
+        assert_eq!(ee.low.as_ref().unwrap().raw, Some(1.93));
+        assert_eq!(ee.high.as_ref().unwrap().raw, Some(2.04));
+        assert_eq!(ee.year_ago_eps.as_ref().unwrap().raw, Some(1.85));
+        assert_eq!(ee.number_of_analysts.as_ref().unwrap().raw, Some(28.0));
+        assert_eq!(
+            ee.number_of_analysts.as_ref().unwrap().long_fmt.as_deref(),
+            Some("28")
+        );
+        assert_eq!(ee.growth.as_ref().unwrap().raw, Some(0.0678));
+        assert_eq!(ee.earnings_currency.as_deref(), Some("USD"));
+
+        let re = item.revenue_estimate.as_ref().unwrap();
+        assert_eq!(re.avg.as_ref().unwrap().raw, Some(113256580210.0));
+        assert_eq!(
+            re.avg.as_ref().unwrap().long_fmt.as_deref(),
+            Some("113,256,580,210")
+        );
+        assert_eq!(re.low.as_ref().unwrap().raw, Some(112137000000.0));
+        assert_eq!(re.high.as_ref().unwrap().raw, Some(115068279000.0));
+        assert_eq!(re.number_of_analysts.as_ref().unwrap().raw, Some(26.0));
+        assert_eq!(
+            re.year_ago_revenue.as_ref().unwrap().raw,
+            Some(102466000000.0)
+        );
+        assert_eq!(re.growth.as_ref().unwrap().raw, Some(0.105299994));
+        assert_eq!(re.revenue_currency.as_deref(), Some("USD"));
+
+        let eps_trend = item.eps_trend.as_ref().unwrap();
+        assert_eq!(eps_trend.current.as_ref().unwrap().raw, Some(1.97549));
+        assert_eq!(
+            eps_trend.seven_days_ago.as_ref().unwrap().raw,
+            Some(2.01204)
+        );
+        assert_eq!(
+            eps_trend.thirty_days_ago.as_ref().unwrap().raw,
+            Some(2.00836)
+        );
+        assert_eq!(
+            eps_trend.sixty_days_ago.as_ref().unwrap().raw,
+            Some(2.00767)
+        );
+        assert_eq!(
+            eps_trend.ninety_days_ago.as_ref().unwrap().raw,
+            Some(2.00379)
+        );
+        assert_eq!(eps_trend.eps_trend_currency.as_deref(), Some("USD"));
+
+        let eps_rev = item.eps_revisions.as_ref().unwrap();
+        assert_eq!(eps_rev.up_last_7days.as_ref().unwrap().raw, Some(1.0));
+        assert_eq!(eps_rev.up_last_30days.as_ref().unwrap().raw, Some(4.0));
+        assert_eq!(eps_rev.down_last_30days.as_ref().unwrap().raw, Some(2.0));
+        assert_eq!(eps_rev.down_last7_days.as_ref().unwrap().raw, Some(1.0));
+        assert!(eps_rev.down_last_90days.as_ref().unwrap().raw.is_none());
+        assert_eq!(eps_rev.eps_revisions_currency.as_deref(), Some("USD"));
+    }
+
+    #[test]
+    fn test_full_earnings_history() {
+        let s = load_summary(AAPL_FIXTURE);
+        let eh = s.earnings_history.unwrap();
+        assert_eq!(eh.max_age, Some(86400));
+        assert_eq!(eh.default_methodology.as_deref(), Some("gaap"));
+        assert_eq!(eh.history.len(), 4);
+        let item = &eh.history[0];
+        assert_eq!(item.max_age, Some(1));
+        assert_eq!(item.eps_actual.as_ref().unwrap().raw, Some(1.85));
+        assert_eq!(item.eps_estimate.as_ref().unwrap().raw, Some(1.76993));
+        assert_eq!(item.eps_difference.as_ref().unwrap().raw, Some(0.08));
+        assert_eq!(item.surprise_percent.as_ref().unwrap().raw, Some(0.0452));
+        assert_eq!(
+            item.surprise_percent.as_ref().unwrap().fmt.as_deref(),
+            Some("4.52%")
+        );
+        assert_eq!(item.quarter.as_ref().unwrap().raw, Some(1759190400.0));
+        assert_eq!(
+            item.quarter.as_ref().unwrap().fmt.as_deref(),
+            Some("2025-09-30")
+        );
+        assert_eq!(item.currency.as_deref(), Some("USD"));
+        assert_eq!(item.period.as_deref(), Some("-4q"));
+    }
+
+    #[test]
+    fn test_full_earnings() {
+        let s = load_summary(AAPL_FIXTURE);
+        let e = s.earnings.unwrap();
+        assert_eq!(e.max_age, Some(86400));
+        assert_eq!(e.financial_currency.as_deref(), Some("USD"));
+
+        let chart = e.earnings_chart.unwrap();
+        assert_eq!(chart.quarterly.len(), 4);
+        let q = &chart.quarterly[0];
+        assert_eq!(q.date.as_deref(), Some("3Q2025"));
+        assert_eq!(q.actual, Some(1.85));
+        assert_eq!(q.estimate, Some(1.76993));
+        assert_eq!(q.fiscal_quarter.as_deref(), Some("4Q2025"));
+        assert_eq!(q.calendar_quarter.as_deref(), Some("3Q2025"));
+        assert_eq!(q.difference.as_deref(), Some("0.08"));
+        assert_eq!(q.surprise_pct.as_deref(), Some("4.52"));
+        assert_eq!(q.period_end_date, Some(1759190400));
+        assert_eq!(q.reported_date, Some(1761856200));
+        assert_eq!(chart.current_quarter_estimate, Some(1.97549));
+        assert_eq!(chart.current_quarter_estimate_date.as_deref(), Some("3Q"));
+        assert_eq!(chart.current_calendar_quarter.as_deref(), Some("3Q2026"));
+        assert_eq!(chart.current_quarter_estimate_year, Some(2026));
+        assert_eq!(chart.current_fiscal_quarter.as_deref(), Some("4Q2026"));
+        assert_eq!(chart.current_period_end_date, Some(1790726400));
+        assert_eq!(chart.earnings_date.as_ref().unwrap(), &vec![1793304000]);
+        assert_eq!(chart.is_earnings_date_estimate, Some(true));
+
+        let fin = e.financials_chart.unwrap();
+        assert_eq!(fin.yearly.len(), 4);
+        assert_eq!(fin.quarterly.len(), 4);
+        let y = &fin.yearly[0];
+        assert_eq!(y.date, Some(2022));
+        assert_eq!(y.revenue, Some(394328000000.0));
+        assert_eq!(y.earnings, Some(99803000000.0));
+        assert_eq!(y.profit_margin, Some(0.2530964));
+        let fq = &fin.quarterly[0];
+        assert_eq!(fq.date.as_deref(), Some("2Q2025"));
+        assert_eq!(fq.fiscal_quarter.as_deref(), Some("3Q2025"));
+        assert_eq!(fq.revenue, Some(94036000000.0));
+        assert_eq!(fq.earnings, Some(23434000000.0));
+        assert_eq!(fq.profit_margin, Some(0.24920243));
+    }
+
+    #[test]
+    fn test_full_upgrade_downgrade_history() {
+        let s = load_summary(AAPL_FIXTURE);
+        let udh = s.upgrade_downgrade_history.unwrap();
+        assert_eq!(udh.max_age, Some(86400));
+        assert_eq!(udh.history.len(), 10);
+        let item = &udh.history[0];
+        assert_eq!(item.epoch_grade_date, Some(1786365485));
+        assert_eq!(item.firm.as_deref(), Some("Jefferies"));
+        assert_eq!(item.to_grade.as_deref(), Some("Underperform"));
+        assert_eq!(item.from_grade.as_deref(), Some("Hold"));
+        assert_eq!(item.action.as_deref(), Some("down"));
+        assert_eq!(item.price_target_action.as_deref(), Some("Lowers"));
+        assert_eq!(item.current_price_target, Some(263.66));
+        assert_eq!(item.prior_price_target, Some(285.56));
+    }
+
+    #[test]
+    fn test_full_calendar_events() {
+        let s = load_summary(AAPL_FIXTURE);
+        let ce = s.calendar_events.unwrap();
+        assert_eq!(ce.max_age, Some(1));
+        assert_eq!(ce.ex_dividend_date, Some(1786320000));
+        assert_eq!(ce.dividend_date, Some(1786579200));
+        let er = ce.earnings.unwrap();
+        assert_eq!(er.earnings_date.as_ref().unwrap(), &vec![1793304000]);
+        assert_eq!(er.earnings_call_date.as_ref().unwrap(), &vec![1785441600]);
+        assert_eq!(er.is_earnings_date_estimate, Some(true));
+        assert_eq!(er.earnings_average, Some(1.97643));
+        assert_eq!(er.earnings_low, Some(1.93));
+        assert_eq!(er.earnings_high, Some(2.04));
+        assert_eq!(er.revenue_average, Some(113256580210.0));
+        assert_eq!(er.revenue_low, Some(112137000000.0));
+        assert_eq!(er.revenue_high, Some(115068279000.0));
+    }
+
+    #[test]
+    fn test_full_insider_holders() {
+        let s = load_summary(AAPL_FIXTURE);
+        let ih = s.insider_holders.unwrap();
+        assert_eq!(ih.max_age, Some(1));
+        assert_eq!(ih.holders.len(), 5);
+        let h = &ih.holders[0];
+        assert_eq!(h.max_age, Some(1));
+        assert_eq!(h.name.as_deref(), Some("ADAMS KATHERINE L"));
+        assert_eq!(h.relation.as_deref(), Some("General Counsel"));
+        assert_eq!(h.url.as_deref(), Some(""));
+        assert_eq!(h.transaction_description.as_deref(), Some("Stock Gift"));
+        assert_eq!(
+            h.latest_trans_date.as_ref().unwrap().raw,
+            Some(1762905600.0)
+        );
+        assert_eq!(
+            h.latest_trans_date.as_ref().unwrap().fmt.as_deref(),
+            Some("2025-11-12")
+        );
+        assert_eq!(h.position_direct.as_ref().unwrap().raw, Some(175408.0));
+        assert_eq!(
+            h.position_direct.as_ref().unwrap().fmt.as_deref(),
+            Some("175.41k")
+        );
+        assert_eq!(
+            h.position_direct.as_ref().unwrap().long_fmt.as_deref(),
+            Some("175,408")
+        );
+        assert_eq!(
+            h.position_direct_date.as_ref().unwrap().raw,
+            Some(1762905600.0)
+        );
+        assert!(h.position_indirect.is_none());
+        assert!(h.position_indirect_date.is_none());
+        assert!(h.shares.is_none());
+        assert!(h.value.is_none());
+        let cook = &ih.holders[1];
+        assert_eq!(cook.name.as_deref(), Some("COOK TIMOTHY D"));
+        assert_eq!(cook.position_direct.as_ref().unwrap().raw, Some(3280420.0));
+        assert_eq!(
+            cook.position_direct.as_ref().unwrap().fmt.as_deref(),
+            Some("3.28M")
+        );
+    }
+
+    #[test]
+    fn test_full_insider_transactions() {
+        let s = load_summary(AAPL_FIXTURE);
+        let it = s.insider_transactions.unwrap();
+        assert_eq!(it.max_age, Some(1));
+        assert_eq!(it.transactions.len(), 10);
+        let t = &it.transactions[0];
+        assert_eq!(t.max_age, Some(1));
+        assert_eq!(t.shares.as_ref().unwrap().raw, Some(116.0));
+        assert_eq!(t.shares.as_ref().unwrap().long_fmt.as_deref(), Some("116"));
+        assert_eq!(t.value.as_ref().unwrap().raw, Some(34236.0));
+        assert_eq!(t.value.as_ref().unwrap().fmt.as_deref(), Some("34.24k"));
+        assert_eq!(t.filer_url.as_deref(), Some(""));
+        assert_eq!(
+            t.transaction_text.as_deref(),
+            Some("Sale at price 295.14 per share.")
+        );
+        assert_eq!(t.filer_name.as_deref(), Some("BORDERS BEN"));
+        assert_eq!(t.filer_relation.as_deref(), Some("Officer"));
+        assert_eq!(t.money_text.as_deref(), Some(""));
+        assert_eq!(t.start_date.as_ref().unwrap().raw, Some(1781568000.0));
+        assert_eq!(t.ownership.as_deref(), Some("D"));
+        let t2 = &it.transactions[1];
+        assert!(t2.value.is_none());
+        assert_eq!(t2.shares.as_ref().unwrap().raw, Some(30104.0));
+        assert_eq!(t2.filer_name.as_deref(), Some("NEWSTEAD JENNIFER"));
+        assert_eq!(t2.filer_relation.as_deref(), Some("General Counsel"));
+    }
+
+    #[test]
+    fn test_full_major_holders_breakdown() {
+        let s = load_summary(AAPL_FIXTURE);
+        let mhb = s.major_holders_breakdown.unwrap();
+        assert_eq!(mhb.max_age, Some(1));
+        assert_eq!(mhb.insiders_percent_held, Some(0.01647));
+        assert_eq!(mhb.institutions_percent_held, Some(0.66289));
+        assert_eq!(mhb.institutions_float_percent_held, Some(0.67399));
+        assert_eq!(mhb.institutions_count, Some(7670));
+    }
+
+    #[test]
+    fn test_full_institution_ownership() {
+        let s = load_summary(AAPL_FIXTURE);
+        let io = s.institution_ownership.unwrap();
+        assert_eq!(io.max_age, Some(1));
+        assert_eq!(io.ownership_list.len(), 5);
+        let item = &io.ownership_list[0];
+        assert_eq!(item.max_age, Some(1));
+        assert_eq!(item.report_date.as_ref().unwrap().raw, Some(1782777600.0));
+        assert_eq!(
+            item.report_date.as_ref().unwrap().fmt.as_deref(),
+            Some("2026-06-30")
+        );
+        assert_eq!(item.organization.as_deref(), Some("Blackrock Inc."));
+        assert_eq!(item.pct_held.as_ref().unwrap().raw, Some(0.0797));
+        assert_eq!(
+            item.pct_held.as_ref().unwrap().fmt.as_deref(),
+            Some("7.97%")
+        );
+        assert_eq!(item.position.as_ref().unwrap().raw, Some(1162996939.0));
+        assert_eq!(
+            item.position.as_ref().unwrap().long_fmt.as_deref(),
+            Some("1,162,996,939")
+        );
+        assert_eq!(item.value.as_ref().unwrap().raw, Some(356653944437.0));
+        assert_eq!(item.value.as_ref().unwrap().fmt.as_deref(), Some("356.65B"));
+        assert_eq!(item.pct_change.as_ref().unwrap().raw, Some(0.016));
+        assert_eq!(
+            item.pct_change.as_ref().unwrap().fmt.as_deref(),
+            Some("1.60%")
+        );
+    }
+
+    #[test]
+    fn test_full_fund_ownership() {
+        let s = load_summary(AAPL_FIXTURE);
+        let fo = s.fund_ownership.unwrap();
+        assert_eq!(fo.max_age, Some(1));
+        assert_eq!(fo.ownership_list.len(), 5);
+        let item = &fo.ownership_list[0];
+        assert_eq!(item.max_age, Some(1));
+        assert_eq!(item.report_date.as_ref().unwrap().raw, Some(1774915200.0));
+        assert_eq!(
+            item.organization.as_deref(),
+            Some("VANGUARD INDEX FUNDS-Vanguard Total Stock Market Index Fund")
+        );
+        assert_eq!(item.pct_held.as_ref().unwrap().raw, Some(0.0319));
+        assert_eq!(item.position.as_ref().unwrap().raw, Some(466211410.0));
+        assert_eq!(
+            item.position.as_ref().unwrap().fmt.as_deref(),
+            Some("466.21M")
+        );
+        assert_eq!(item.value.as_ref().unwrap().raw, Some(142972120340.0));
+        assert_eq!(item.value.as_ref().unwrap().fmt.as_deref(), Some("142.97B"));
+        assert_eq!(item.pct_change.as_ref().unwrap().raw, Some(0.004));
+        assert_eq!(
+            item.pct_change.as_ref().unwrap().fmt.as_deref(),
+            Some("0.40%")
+        );
+    }
+
+    #[test]
+    fn test_full_net_share_purchase_activity() {
+        let s = load_summary(AAPL_FIXTURE);
+        let nsp = s.net_share_purchase_activity.unwrap();
+        assert_eq!(nsp.max_age, Some(1));
+        assert_eq!(nsp.period.as_deref(), Some("6m"));
+        assert_eq!(nsp.buy_info_count, Some(11));
+        assert_eq!(nsp.buy_info_shares, Some(434520));
+        assert_eq!(nsp.buy_percent_insider_shares, Some(0.002));
+        assert_eq!(nsp.sell_info_count, Some(7));
+        assert_eq!(nsp.sell_info_shares, Some(397875));
+        assert_eq!(nsp.sell_percent_insider_shares, Some(0.002));
+        assert_eq!(nsp.net_info_count, Some(18));
+        assert_eq!(nsp.net_info_shares, Some(36645));
+        assert_eq!(nsp.net_percent_insider_shares, Some(0.0));
+        assert_eq!(nsp.net_inst_shares_buying, Some(62874610));
+        assert_eq!(nsp.net_inst_buying_percent, Some(0.0064999997));
+        assert_eq!(nsp.total_insider_shares, Some(240366144));
+    }
+
+    #[test]
+    fn test_full_sec_filings() {
+        let s = load_summary(AAPL_FIXTURE);
+        let sf = s.sec_filings.unwrap();
+        assert_eq!(sf.max_age, Some(86400));
+        assert_eq!(sf.filings.len(), 10);
+        let f = &sf.filings[0];
+        assert_eq!(f.max_age, Some(1));
+        assert_eq!(f.date.as_deref(), Some("2026-07-31"));
+        assert_eq!(f.epoch_date, Some(1785456000));
+        assert_eq!(f.filing_type.as_deref(), Some("10-Q"));
+        assert_eq!(f.title.as_deref(), Some("Periodic Financial Reports"));
+        assert_eq!(
+            f.edgar_url.as_deref(),
+            Some("https://finance.yahoo.com/sec-filing/AAPL/0000320193-26-000020_320193")
+        );
+        let exhibits = f.exhibits.as_ref().unwrap();
+        assert_eq!(exhibits.len(), 4);
+        assert_eq!(exhibits[0].exhibit_type.as_deref(), Some("EX-31.1"));
+        assert_eq!(
+            exhibits[0].url.as_deref(),
+            Some("https://cdn.yahoofinance.com/prod/sec-filings/0000320193/000032019326000020/a10-qexhibit31106272026.htm")
+        );
+        assert_eq!(exhibits[1].exhibit_type.as_deref(), Some("EX-31.2"));
+        assert_eq!(exhibits[3].exhibit_type.as_deref(), Some("10-Q"));
+    }
+
+    #[test]
+    fn test_full_fund_profile() {
+        let s = load_summary(VOO_FIXTURE);
+        let fp = s.fund_profile.unwrap();
+        assert_eq!(fp.max_age, Some(1));
+        assert_eq!(
+            fp.style_box_url.as_deref(),
+            Some("https://s.yimg.com/lq/i/fi/3_0stylelargeeq2.gif")
+        );
+        assert_eq!(fp.family.as_deref(), Some("Vanguard"));
+        assert_eq!(fp.category_name.as_deref(), Some("Large Blend"));
+        assert_eq!(fp.legal_type.as_deref(), Some("Exchange Traded Fund"));
+        let mi = fp.management_info.unwrap();
+        assert!(mi.manager_name.is_none());
+        assert!(mi.manager_bio.is_none());
+        let fees = fp.fees_expenses_investment.unwrap();
+        assert_eq!(fees.annual_report_expense_ratio, Some(0.00029999999));
+        assert_eq!(fees.annual_holdings_turnover, Some(0.02));
+        assert_eq!(fees.total_net_assets, Some(486952.38));
+        assert!(fees.projection_values.unwrap().raw.is_none());
+        let fees_cat = fp.fees_expenses_investment_cat.unwrap();
+        assert_eq!(fees_cat.annual_report_expense_ratio, Some(0.0072176997));
+        assert_eq!(fees_cat.annual_holdings_turnover, Some(0.9461));
+        assert_eq!(fees_cat.total_net_assets, Some(486952.38));
+        assert!(fees_cat.projection_values.is_none());
+        assert_eq!(fp.brokerages.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_full_top_holdings() {
+        let s = load_summary(VOO_FIXTURE);
+        let th = s.top_holdings.unwrap();
+        assert_eq!(th.max_age, Some(1));
+        assert_eq!(th.cash_position, Some(0.0022));
+        assert_eq!(th.stock_position, Some(0.9957));
+        assert_eq!(th.bond_position, Some(0.0));
+        assert_eq!(th.other_position, Some(0.002));
+        assert_eq!(th.preferred_position, Some(0.0));
+        assert_eq!(th.convertible_position, Some(0.0));
+        assert_eq!(th.holdings.len(), 10);
+        assert_eq!(th.holdings[0].symbol.as_deref(), Some("NVDA"));
+        assert_eq!(th.holdings[0].holding_name.as_deref(), Some("NVIDIA Corp"));
+        assert_eq!(th.holdings[0].holding_percent, Some(0.074991));
+        assert_eq!(th.holdings[1].symbol.as_deref(), Some("AAPL"));
+        assert_eq!(th.holdings[1].holding_percent, Some(0.065766804));
+        let eq = th.equity_holdings.unwrap();
+        assert_eq!(eq.price_to_earnings, Some(0.03716));
+        assert_eq!(eq.price_to_book, Some(0.18538));
+        assert_eq!(eq.price_to_sales, Some(0.269));
+        assert_eq!(eq.price_to_cashflow, Some(0.05028));
+        let bonds = th.bond_holdings.unwrap();
+        assert!(bonds.price_to_earnings.is_none());
+        assert!(bonds.price_to_book.is_none());
+        assert!(bonds.price_to_sales.is_none());
+        assert!(bonds.price_to_cashflow.is_none());
+        assert_eq!(th.bond_ratings.len(), 1);
+        assert_eq!(th.bond_ratings[0].get("us_government"), Some(&0.0));
+        assert_eq!(th.sector_weightings.len(), 11);
+        assert_eq!(th.sector_weightings[0].get("realestate"), Some(&0.0183));
+        assert_eq!(th.sector_weightings[4].get("technology"), Some(&0.3861));
+        assert_eq!(
+            th.sector_weightings[10].get("healthcare"),
+            Some(&0.088999994)
+        );
+    }
+
+    // Regression tests for the panic guards (empty result/quote/adjclose) and
+    // the null-tolerant trading periods
+
+    #[test]
+    fn test_empty_chart_result_is_noresult_not_panic() {
+        let response: YResponse =
+            serde_json::from_str(r#"{"chart":{"result":[],"error":null}}"#).unwrap();
+        assert!(matches!(response.last_quote(), Err(YahooError::NoResult)));
+        assert!(matches!(response.quotes(), Err(YahooError::NoResult)));
+        assert!(matches!(response.metadata(), Err(YahooError::NoResult)));
+        assert!(matches!(response.splits(), Err(YahooError::NoResult)));
+        assert!(matches!(response.dividends(), Err(YahooError::NoResult)));
+        assert!(matches!(
+            response.capital_gains(),
+            Err(YahooError::NoResult)
+        ));
+    }
+
+    #[test]
+    fn test_empty_quote_list_is_datainconsistency_not_panic() {
+        let response: YResponse = serde_json::from_str(
+            r#"{"chart":{"result":[{"meta":{"symbol":"TEST","instrumentType":"EQUITY","exchangeName":"NMS","fullExchangeName":"Nasdaq","gmtoffset":-14400,"timezone":"EDT","exchangeTimezoneName":"America/New_York","hasPrePostMarketData":true,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo"},"timestamp":[1,2],"indicators":{"quote":[]}}],"error":null}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            response.last_quote(),
+            Err(YahooError::DataInconsistency)
+        ));
+    }
+
+    #[test]
+    fn test_short_adjclose_series_is_datainconsistency_not_panic() {
+        let response: YResponse = serde_json::from_str(
+            r#"{"chart":{"result":[{"meta":{"symbol":"TEST","instrumentType":"EQUITY","exchangeName":"NMS","fullExchangeName":"Nasdaq","gmtoffset":-14400,"timezone":"EDT","exchangeTimezoneName":"America/New_York","hasPrePostMarketData":true,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo"},"timestamp":[1,2],"indicators":{"quote":[{"open":[1.0,2.0],"high":[1.0,2.0],"low":[1.0,2.0],"close":[1.0,2.0],"volume":[1,2]}],"adjclose":[{"adjclose":[1.0]}]}}],"error":null}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            response.quotes(),
+            Err(YahooError::DataInconsistency)
+        ));
+    }
+
+    #[test]
+    fn test_null_trading_periods_fall_back_to_default() {
+        let meta: YMetaData = serde_json::from_str(
+            r#"{"currency":"USD","symbol":"BTC-USD","exchangeName":"CCC","fullExchangeName":"Crypto Coin Market","instrumentType":"CRYPTOCURRENCY","firstTradeDate":1419031800,"regularMarketTime":1724000000,"hasPrePostMarketData":false,"gmtoffset":0,"timezone":"UTC","exchangeTimezoneName":"UTC","regularMarketPrice":60000.0,"fiftyTwoWeekHigh":70000.0,"fiftyTwoWeekLow":15000.0,"regularMarketDayHigh":61000.0,"regularMarketDayLow":59000.0,"regularMarketVolume":1000,"longName":"Bitcoin USD","shortName":"BTC-USD","chartPreviousClose":59000.0,"priceHint":2,"currentTradingPeriod":null,"tradingPeriods":null,"dataGranularity":"1d","range":"1mo","validRanges":["1d","5d","1mo"]}"#,
+        )
+        .unwrap();
+        assert_eq!(meta.current_trading_period.pre, PeriodInfo::default());
+        assert_eq!(meta.current_trading_period.regular, PeriodInfo::default());
+        assert_eq!(meta.current_trading_period.post, PeriodInfo::default());
+        assert_eq!(meta.trading_periods, TradingPeriods::default());
     }
 }
