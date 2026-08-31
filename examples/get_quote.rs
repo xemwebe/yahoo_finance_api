@@ -1,33 +1,59 @@
+// Retrieve the latest quote for a user-provided ticker symbol.
 use std::io::Write;
 use yahoo::Decimal;
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
-fn get_quote(name: &str) -> Result<Decimal, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new().unwrap();
-    // get the latest quotes in 1 minute intervals
-    let response = tokio_test::block_on(provider.get_latest_quotes(name, "1d")).unwrap();
-    // extract just the latest valid quote summery
+async fn get_quote(name: &str) -> Result<Decimal, yahoo::YahooError> {
+    let provider = yahoo::YahooConnector::new()?;
+    // get the latest quotes with the given interval
+    let response = provider.get_latest_quotes(name, "1d").await?;
+    // extract just the latest valid quote summary
     let quote = response.last_quote()?;
     Ok(quote.close)
 }
 
 #[cfg(feature = "blocking")]
 fn get_quote(name: &str) -> Result<Decimal, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new().unwrap();
-    // get the latest quotes in 1 minute intervals
-    let response = provider.get_latest_quotes(name, "1d").unwrap();
-    // extract just the latest valid quote summery
+    let provider = yahoo::YahooConnector::new()?;
+    // get the latest quotes with the given interval
+    let response = provider.get_latest_quotes(name, "1d")?;
+    // extract just the latest valid quote summary
     let quote = response.last_quote()?;
     Ok(quote.close)
 }
 
+#[cfg(not(feature = "blocking"))]
+#[tokio::main]
+async fn main() {
+    print!("Please enter a quote name: ");
+    std::io::stdout().lock().flush().unwrap();
+    let mut quote_name = String::new();
+    std::io::stdin().read_line(&mut quote_name).unwrap();
+    let quote_name = quote_name.trim();
+    if quote_name.is_empty() {
+        println!("no ticker provided");
+        return;
+    }
+    match get_quote(quote_name).await {
+        Ok(quote) => println!("Most recent price of {quote_name} is {quote}"),
+        Err(err) => println!("failed to fetch {quote_name}: {err:?}"),
+    }
+}
+
+#[cfg(feature = "blocking")]
 fn main() {
     print!("Please enter a quote name: ");
     std::io::stdout().lock().flush().unwrap();
     let mut quote_name = String::new();
     std::io::stdin().read_line(&mut quote_name).unwrap();
     let quote_name = quote_name.trim();
-    let quote = get_quote(quote_name).unwrap();
-    println!("Most recent price of {quote_name} is {quote}");
+    if quote_name.is_empty() {
+        println!("no ticker provided");
+        return;
+    }
+    match get_quote(quote_name) {
+        Ok(quote) => println!("Most recent price of {quote_name} is {quote}"),
+        Err(err) => println!("failed to fetch {quote_name}: {err:?}"),
+    }
 }

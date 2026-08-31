@@ -56,6 +56,13 @@ pub(crate) fn decode_body(
     if status == StatusCode::UNAUTHORIZED {
         return Err(YahooError::Unauthorized);
     }
+    if status == StatusCode::FORBIDDEN {
+        // Yahoo surfaces a stale crumb/cookie as a 403 (same as 401). Mapping
+        // it to Unauthorized lets the retry guard in get_ticker_info refresh
+        // the crumb/cookie and retry, matching get_financial_events and
+        // get_crumb which already treat 403 as an expired session.
+        return Err(YahooError::Unauthorized);
+    }
     if status == StatusCode::NOT_FOUND {
         return Err(YahooError::FetchFailed(format!(
             "404, request url: {}",
@@ -63,6 +70,13 @@ pub(crate) fn decode_body(
         )));
     }
     if !status.is_success() {
+        if status.is_server_error() {
+            return Err(YahooError::ServerError(format!(
+                "{} status, request url: {}",
+                status.as_u16(),
+                url
+            )));
+        }
         let body = text.trim();
         if !body.is_empty() && body.starts_with('{') {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
@@ -79,18 +93,48 @@ pub(crate) fn decode_body(
     }
 
     let body = text.trim();
+    // Strip a UTF-8 BOM some proxies prepend to the body before classification.
+    let body = body.trim_start_matches('\u{feff}');
     if body.is_empty() {
         return Err(YahooError::EmptyResponse);
     }
     if body.starts_with('<') {
         return Err(YahooError::HtmlResponse);
     }
-    if body.len() <= 4_000 && body.to_ascii_lowercase().contains("too many requests") {
+    // Yahoo serves a short maintenance page when the API is temporarily down.
+    // yfinance detects this exact phrase (history.py "Will be right back").
+    // No length cap: a plain-text outage page longer than 4 KB must still be
+    // classified as a maintenance page (HTML is caught by starts_with('<')).
+    // Only match non-JSON bodies, like the rate-limit check below: a valid
+    // JSON error whose description mentions the phrase must not be
+    // misclassified (a long JSON body containing it used to slip past the old
+    // 4 KB cap).
+    if !body.starts_with('{') && !body.starts_with('[') && body.contains("Will be right back") {
+        return Err(YahooError::HtmlResponse);
+    }
+    // A plain-text rate-limit message is definitive (yfinance raises
+    // YFRateLimitError for it). Only match non-JSON bodies: a valid JSON
+    // error whose description happens to mention "too many requests" (e.g.
+    // `{"chart":{"error":{"code":"InvalidPeriod",...}}}`) must not be
+    // misclassified as a rate limit.
+    if !body.starts_with('{')
+        && !body.starts_with('[')
+        && body.to_ascii_lowercase().contains("too many requests")
+    {
         return Err(YahooError::TooManyRequests(url.to_string()));
     }
 
     match serde_json::from_str::<serde_json::Value>(body) {
         Ok(json) => {
+            // yfinance treats a `{"status_code": ...}` body (200) as a
+            // Yahoo-side error rather than a deserialization problem
+            // (history.py: "Yahoo status_code = ...").
+            if json.get("status_code").is_some() {
+                return Err(YahooError::FetchFailed(format!(
+                    "Yahoo returned status_code in body, request url: {}",
+                    url
+                )));
+            }
             if let Some((code, description)) = top_error_code(&json) {
                 return Err(error_from_code(&code, description.as_deref(), url));
             }
@@ -154,6 +198,50 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_maintenance_page() {
+        // yfinance detects the exact maintenance phrase "Will be right back".
+        let body = "Will be right back\n\nThanks for your patience.";
+        match parse(body, StatusCode::OK) {
+            Err(YahooError::HtmlResponse) => {}
+            other => panic!("expected HtmlResponse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_maintenance_page_long_body() {
+        // No length cap: a plain-text outage page longer than 4000 chars (not
+        // HTML) must still be classified as a maintenance page.
+        let mut body = String::from("Will be right back\n");
+        body.push_str(&"x".repeat(5_000));
+        match parse(&body, StatusCode::OK) {
+            Err(YahooError::HtmlResponse) => {}
+            other => panic!("expected HtmlResponse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_json_mentioning_will_be_right_back_not_maintenance() {
+        // A valid JSON error whose description mentions the maintenance phrase
+        // must be parsed as JSON (ApiError), not misclassified as a page.
+        let json =
+            r#"{"chart":{"error":{"code":"ServerError","description":"Will be right back"}}}"#;
+        match parse(json, StatusCode::OK) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("ServerError"));
+            }
+            other => panic!("expected ApiError, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_bom_prefixed_json() {
+        // A UTF-8 BOM prepended by a proxy must not break JSON classification.
+        let body = format!("\u{feff}{}", r#"{"chart":{"result":[1],"error":null}}"#);
+        let parsed = parse(&body, StatusCode::OK).unwrap();
+        assert_eq!(parsed["chart"]["result"][0], 1);
+    }
+
+    #[test]
     fn test_decode_rate_limited() {
         match parse("Too Many Requests", StatusCode::OK) {
             Err(YahooError::TooManyRequests(_)) => {}
@@ -176,12 +264,18 @@ mod tests {
     #[test]
     fn test_decode_server_error_status() {
         match parse("", StatusCode::INTERNAL_SERVER_ERROR) {
-            Err(YahooError::FetchFailed(e)) if e.contains("500 status") => {}
-            other => panic!("expected FetchFailed 500, got {:?}", other),
+            Err(YahooError::ServerError(e)) if e.contains("500 status") => {}
+            other => panic!("expected ServerError 500, got {:?}", other),
         }
         match parse("", StatusCode::UNAUTHORIZED) {
             Err(YahooError::Unauthorized) => {}
             other => panic!("expected Unauthorized, got {:?}", other),
+        }
+        // 403 = stale crumb/cookie, mapped to Unauthorized so the retry guard
+        // can refresh the session (same as get_financial_events/get_crumb).
+        match parse("", StatusCode::FORBIDDEN) {
+            Err(YahooError::Unauthorized) => {}
+            other => panic!("expected Unauthorized for 403, got {:?}", other),
         }
     }
 
@@ -227,6 +321,24 @@ mod tests {
                 assert_eq!(err.code.as_deref(), Some("InvalidPeriod"));
             }
             other => panic!("expected ApiError for 422, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_json_mentioning_too_many_requests_not_rate_limit() {
+        // A valid JSON error whose description merely mentions "too many
+        // requests" must be classified as an ApiError, not a rate limit.
+        let json = r#"{"chart":{"error":{"code":"InvalidPeriod","description":"too many requests in period"}}}"#;
+        match parse(json, StatusCode::OK) {
+            Err(YahooError::ApiError(err)) => {
+                assert_eq!(err.code.as_deref(), Some("InvalidPeriod"));
+            }
+            other => panic!("expected ApiError, got {:?}", other),
+        }
+        // A plain-text rate-limit body is still definitive.
+        match parse("Too Many Requests", StatusCode::OK) {
+            Err(YahooError::TooManyRequests(_)) => {}
+            other => panic!("expected TooManyRequests, got {:?}", other),
         }
     }
 

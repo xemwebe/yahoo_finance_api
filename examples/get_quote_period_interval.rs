@@ -1,22 +1,22 @@
-#[cfg(not(feature = "blocking"))]
-use tokio_test;
+// Retrieve intraday quotes (1-minute interval, including pre/post market data) for a ticker.
 use yahoo_finance_api as yahoo;
 
 #[cfg(not(feature = "blocking"))]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
+#[tokio::main]
+async fn main() {
     let provider = yahoo::YahooConnector::new().unwrap();
-    tokio_test::block_on(provider.get_quote_period_interval("AAPL", "1d", "1m", true))
+    let quote_history = provider
+        .get_quote_period_interval("AAPL", "1d", "1m", true)
+        .await
+        .unwrap();
+    println!("Quote history of AAPL:\n{:#?}", quote_history);
 }
 
 #[cfg(feature = "blocking")]
-fn get_history() -> Result<yahoo::YResponse, yahoo::YahooError> {
-    let provider = yahoo::YahooConnector::new().unwrap();
-    provider.get_quote_period_interval("AAPL", "1d", "1m", true)
-}
-
 fn main() {
-    let quote_history = get_history().unwrap();
-    //let times = quote_history.chart.result.timestamp;
-    //let quotes = quote_history.indicators.quote.q
-    println!("Quote history of VTI:\n{:#?}", quote_history);
+    let provider = yahoo::YahooConnector::new().unwrap();
+    let quote_history = provider
+        .get_quote_period_interval("AAPL", "1d", "1m", true)
+        .unwrap();
+    println!("Quote history of AAPL:\n{:#?}", quote_history);
 }

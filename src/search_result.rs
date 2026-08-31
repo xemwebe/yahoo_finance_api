@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::YahooError;
 
+/// Search result with optional fields (`Option<String>` for names).
 #[derive(Deserialize, Debug)]
 pub struct YSearchResultOpt {
     pub count: u32,
@@ -9,6 +10,7 @@ pub struct YSearchResultOpt {
     pub news: Vec<YNewsItem>,
 }
 
+/// A single search hit with optional name fields.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuoteItemOpt {
@@ -26,6 +28,7 @@ pub struct YQuoteItemOpt {
     pub is_yahoo_finance: bool,
 }
 
+/// A news item returned alongside the search results.
 #[derive(Deserialize, Debug, Clone)]
 pub struct YNewsItem {
     pub uuid: String,
@@ -39,11 +42,15 @@ pub struct YNewsItem {
 }
 
 impl YSearchResultOpt {
+    /// Deserialize a [`YSearchResultOpt`] from a JSON value returned by the
+    /// search API.
     pub fn from_json(json: serde_json::Value) -> Result<YSearchResultOpt, YahooError> {
         Ok(serde_json::from_value(json)?)
     }
 }
 
+/// Search result with missing name fields replaced by default values
+/// (e.g. empty strings). Use [`YSearchResultOpt`] to keep the `Option`s.
 #[derive(Debug)]
 pub struct YSearchResult {
     pub count: u32,
@@ -51,6 +58,7 @@ pub struct YSearchResult {
     pub news: Vec<YNewsItem>,
 }
 
+/// A single search hit with missing name fields replaced by default values.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuoteItem {
@@ -101,6 +109,8 @@ fn remove_opt(quotes: &[YQuoteItemOpt]) -> Vec<YQuoteItem> {
 }
 
 impl YSearchResult {
+    /// Convert an optional-field search result into one with default values
+    /// (e.g. empty strings for missing names).
     pub fn from_opt(search_result_opt: &YSearchResultOpt) -> YSearchResult {
         YSearchResult {
             count: search_result_opt.count,
@@ -110,12 +120,14 @@ impl YSearchResult {
     }
 }
 
+/// Options chain response for a ticker.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionChain {
     pub option_chain: YOptionChainResult,
 }
 
+/// Result part of the options chain, containing one entry per expiration date.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionChainResult {
@@ -123,6 +135,7 @@ pub struct YOptionChainResult {
     pub error: Option<String>,
 }
 
+/// Options data for one underlying symbol.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionChainData {
@@ -134,6 +147,7 @@ pub struct YOptionChainData {
     pub options: Vec<YOptionDetails>,
 }
 
+/// Current market quote data for the underlying symbol.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YQuote {
@@ -213,6 +227,7 @@ pub struct YQuote {
     pub symbol: String,
 }
 
+/// Calls and puts for one expiration date.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionDetails {
@@ -222,6 +237,7 @@ pub struct YOptionDetails {
     pub puts: Vec<YOptionContract>,
 }
 
+/// A single option contract (call or put).
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct YOptionContract {

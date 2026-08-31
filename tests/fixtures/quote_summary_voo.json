@@ -1,0 +1,141 @@
+{
+ "quoteSummary": {
+  "result": [
+   {
+    "fundProfile": {
+     "maxAge": 1,
+     "styleBoxUrl": "https://s.yimg.com/lq/i/fi/3_0stylelargeeq2.gif",
+     "family": "Vanguard",
+     "categoryName": "Large Blend",
+     "legalType": "Exchange Traded Fund",
+     "managementInfo": {
+      "managerName": null,
+      "managerBio": null
+     },
+     "feesExpensesInvestment": {
+      "annualReportExpenseRatio": 0.00029999999,
+      "annualHoldingsTurnover": 0.02,
+      "totalNetAssets": 486952.38,
+      "projectionValues": {}
+     },
+     "feesExpensesInvestmentCat": {
+      "annualReportExpenseRatio": 0.0072176997,
+      "annualHoldingsTurnover": 0.9461,
+      "totalNetAssets": 486952.38,
+      "projectionValuesCat": {}
+     },
+     "brokerages": []
+    },
+    "topHoldings": {
+     "maxAge": 1,
+     "cashPosition": 0.0022,
+     "stockPosition": 0.9957,
+     "bondPosition": 0.0,
+     "otherPosition": 0.002,
+     "preferredPosition": 0.0,
+     "convertiblePosition": 0.0,
+     "holdings": [
+      {
+       "symbol": "NVDA",
+       "holdingName": "NVIDIA Corp",
+       "holdingPercent": 0.074991
+      },
+      {
+       "symbol": "AAPL",
+       "holdingName": "Apple Inc",
+       "holdingPercent": 0.065766804
+      },
+      {
+       "symbol": "MSFT",
+       "holdingName": "Microsoft Corp",
+       "holdingPercent": 0.0428796
+      },
+      {
+       "symbol": "AMZN",
+       "holdingName": "Amazon.com Inc",
+       "holdingPercent": 0.036104802
+      },
+      {
+       "symbol": "GOOGL",
+       "holdingName": "Alphabet Inc Class A",
+       "holdingPercent": 0.032427102
+      },
+      {
+       "symbol": "AVGO",
+       "holdingName": "Broadcom Inc",
+       "holdingPercent": 0.027676499
+      },
+      {
+       "symbol": "GOOG",
+       "holdingName": "Alphabet Inc Class C",
+       "holdingPercent": 0.0258423
+      },
+      {
+       "symbol": "MU",
+       "holdingName": "Micron Technology Inc",
+       "holdingPercent": 0.0201451
+      },
+      {
+       "symbol": "META",
+       "holdingName": "Meta Platforms Inc Class A",
+       "holdingPercent": 0.0191435
+      },
+      {
+       "symbol": "TSLA",
+       "holdingName": "Tesla Inc",
+       "holdingPercent": 0.0183241
+      }
+     ],
+     "equityHoldings": {
+      "priceToEarnings": 0.03716,
+      "priceToBook": 0.18538,
+      "priceToSales": 0.269,
+      "priceToCashflow": 0.05028
+     },
+     "bondHoldings": {},
+     "bondRatings": [
+      {
+       "us_government": 0.0
+      }
+     ],
+     "sectorWeightings": [
+      {
+       "realestate": 0.0183
+      },
+      {
+       "consumer_cyclical": 0.0951
+      },
+      {
+       "basic_materials": 0.0166
+      },
+      {
+       "consumer_defensive": 0.045300003
+      },
+      {
+       "technology": 0.3861
+      },
+      {
+       "communication_services": 0.0991
+      },
+      {
+       "financial_services": 0.1141
+      },
+      {
+       "utilities": 0.022
+      },
+      {
+       "industrials": 0.0846
+      },
+      {
+       "energy": 0.0298
+      },
+      {
+       "healthcare": 0.088999994
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

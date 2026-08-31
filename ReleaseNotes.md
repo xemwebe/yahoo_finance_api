@@ -1,3 +1,49 @@
+## Release 5.0.0
+### Breaking changes
++ `FinancialData::total_cash`/`total_debt`: `Option<i64>` -> `Option<f64>` (preserves
+  fractional values; negative values were already handled). Update code that reads these
+  as integers, e.g. `total_cash as i64` no longer compiles.
++ `CompanyOfficer::name`/`title`: `String` -> `Option<String>` (Yahoo returns `null` for
+  some officers). Use `name.as_deref()`/`unwrap_or("")` instead of a bare `&name`.
++ `YEarningsColumn::label`: `String` -> `Option<String>`.
++ `AssetProfile::full_time_employees`: `Option<u32>` -> `Option<i64>` (Yahoo has emitted
+  negative employee counts).
++ `YMetaData::first_trade_date`: `Option<i32>` -> `Option<i64>` (timestamps before 1970
+  or after 2038 overflow `i32`).
++ `SummaryDetail::strike_price`: `Option<u32>` -> `Option<f64>` (options can have
+  fractional strikes, e.g. 212.5).
++ `YahooError` gained a new variant `ServerError(String)` (5xx). Code that does an
+  exhaustive `match` over `YahooError` must add a `ServerError(_)` arm.
++ `YahooError::EmptyResponse` and `YahooError::HtmlResponse` are also new since the last
+  published release (4.2.0) — exhaustive `match` over `YahooError` must handle them too.
+
+### New features
++ new method: `get_ticker_info(symbol)` returns all 20 quoteSummary modules (assetProfile,
+  summaryDetail, defaultKeyStatistics, quoteType, financialData, recommendationTrend,
+  earningsTrend, earningsHistory, earnings, upgradeDowngradeHistory, calendarEvents,
+  insiderHolders, insiderTransactions, majorHoldersBreakdown, institutionOwnership,
+  fundOwnership, netSharePurchaseActivity, fundProfile, topHoldings, secFilings)
++ quoteSummary modules tolerate missing or empty list fields (serde default)
++ new method: `YQuoteSummary::from_json` for offline deserialization
++ error handling: quoteSummary API errors (v10) trigger the crumb/Unauthorized retry;
+  invalid URLs are reported as `YahooError::InvalidUrl` instead of panicking
++ expand the examples suite (16 examples: ticker_info, quote_range, errors, search_opt, ...)
++ robust deserialization: `Infinity`/`NaN`/`-Infinity` strings and numeric strings in
+  quoteSummary `f64` fields are tolerated; placeholder strings (`"N/A"`, `"--"`) become
+  `None`; `{"raw": ..., "fmt": ...}` dict values are unwrapped; `null` list fields fall
+  back to empty vectors; empty chart results/quote/adjclose blocks return typed errors
+  instead of panicking
++ new fields: `SummaryDetail::all_time_high/all_time_low/non_diluted_market_cap`,
+  `FundValuation` gains the full category/bond-valuation field set used by yfinance
++ retries and session refresh: `get_ticker_info` and `get_financial_events` refresh the
+  crumb+cookie pair on 401/403/5xx/parse errors and on 200-JSON "Invalid Crumb"/"Unauthorized"
+  responses; chart requests retry once on empty/HTML/5xx responses
++ error classification: new `YahooError::ServerError` (5xx), `HtmlResponse`, `EmptyResponse`;
+  403 is mapped to `Unauthorized` (stale session), 404 on the crumb endpoint to `FetchFailed`;
+  HTTP 429 and plain-text "too many requests" bodies are definitive (never retried)
++ `get_financial_events` aggregates all result documents (not just the first) and parses
+  numeric-string cells (e.g. `"1.6"`) for EPS fields
+
 ## Release 4.2.0
 + Added an optional rate-limiting `governor` feature to gracefully handle request throttling and prevent HTTP 429 rate limits.
 + Support for custom rate limits via `YahooConnectorBuilder::rate_limit()`.
@@ -5,7 +51,7 @@
 + devcontainer added
 + Route all Yahoo API requests through proxy pool
 + Fix: get_crumb, get_ticker_info, get_financial_events now use proxy
-+ Fix: cookie header sends only name=value, not raw Set-Cookie attributeg
++ Fix: cookie header sends only name=value, not raw Set-Cookie attribute
 + Fix: stale crumb in URL after Invalid Crumb refresh
 + Add https_only(true) for security
 
